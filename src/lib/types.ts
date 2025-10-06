@@ -8,8 +8,14 @@ export interface StrategicBlueprint extends ExtractStrategicBlueprintOutput {
 
 export type DraftStatus = 'Draft' | 'In Review' | 'Approved' | 'Rejected';
 
+export type Attachment = {
+  name: string;
+  url: string;
+  type: string;
+};
+
 export type Draft = {
-  id: string;
+  id:string;
   title: string;
   content: string;
   status: DraftStatus;
@@ -21,6 +27,7 @@ export type Draft = {
   suggestions?: string[];
   rationale?: string;
   justification?: string;
+  attachments?: Attachment[];
 };
 
 export type CalendarEvent = {

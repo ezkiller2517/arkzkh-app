@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { v4 as uuidv4 } from 'uuid';
-import { Loader2, Sparkles, FileUp } from 'lucide-react';
+import { Loader2, Sparkles, FileUp, Paperclip, Image as ImageIcon, Video, File as FileIcon } from 'lucide-react';
 import { useApp } from '@/components/app-provider';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -38,7 +38,7 @@ export default function DraftEditorPage({ params }: { params: { id: string } }) 
 
   useEffect(() => {
     if (id === 'new') {
-      setDraft({ id: uuidv4(), title: '', content: '', status: 'Draft' });
+      setDraft({ id: uuidv4(), title: '', content: '', status: 'Draft', attachments: [] });
     } else {
       const existingDraft = getDraft(id);
       if (existingDraft) {
@@ -71,13 +71,14 @@ export default function DraftEditorPage({ params }: { params: { id: string } }) 
         return;
     };
     setIsSaving(true);
-    const draftData = {
+    const draftData: Partial<Draft> & {id: string} = {
         id: draft.id,
         title: draft.title,
         content: draft.content,
         author: userData?.displayName || 'Unknown Author',
         status: draft.status || 'Draft',
-        createdAt: draft.createdAt || serverTimestamp()
+        createdAt: draft.createdAt || serverTimestamp(),
+        attachments: draft.attachments || [],
     }
     saveDraft(draftData);
     setIsSaving(false);
@@ -172,9 +173,45 @@ export default function DraftEditorPage({ params }: { params: { id: string } }) 
           placeholder="Start writing your content here..."
           value={draft.content || ''}
           onChange={e => setDraft(d => d ? { ...d, content: e.target.value } : null)}
-          className="min-h-[60vh] text-base"
+          className="min-h-[50vh] text-base"
           disabled={!canEdit}
         />
+        <div className="space-y-4">
+            <div className="flex items-center gap-4">
+                <h2 className="text-lg font-semibold">Attachments</h2>
+                <Button variant="outline" size="sm" disabled={!canEdit}>
+                    <FileUp className="mr-2 h-4 w-4" />
+                    Upload Media
+                </Button>
+            </div>
+            {draft.attachments && draft.attachments.length > 0 ? (
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                    {draft.attachments.map((file, index) => (
+                        <div key={index} className="relative group border rounded-lg overflow-hidden">
+                            {file.type.startsWith('image/') ? (
+                                <img src={file.url} alt={file.name} className="h-32 w-full object-cover" />
+                            ) : file.type.startsWith('video/') ? (
+                                <div className="h-32 w-full bg-black flex items-center justify-center">
+                                    <Video className="h-10 w-10 text-white" />
+                                </div>
+                            ) : (
+                                <div className="h-32 w-full bg-muted flex items-center justify-center">
+                                     <FileIcon className="h-10 w-10 text-muted-foreground" />
+                                </div>
+                            )}
+                             <div className="absolute bottom-0 left-0 right-0 bg-black/50 p-2 text-white text-xs truncate">
+                                {file.name}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            ) : (
+                <div className="flex flex-col items-center justify-center text-center p-6 border-2 border-dashed rounded-lg">
+                    <Paperclip className="h-8 w-8 text-muted-foreground mb-2" />
+                    <p className="text-sm text-muted-foreground">No files attached yet.</p>
+                </div>
+            )}
+        </div>
       </div>
       <div className="w-full lg:w-[400px] lg:min-w-[400px] lg:max-h-screen lg:overflow-y-auto border-l bg-muted/20 p-4 md:p-6 sticky top-0">
         <Card className="sticky top-6">
