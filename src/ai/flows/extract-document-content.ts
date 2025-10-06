@@ -7,6 +7,7 @@
  */
 
 import {ai} from '@/ai/genkit';
+import {z} from 'genkit';
 import {
   DocumentInput,
   DocumentInputSchema,
@@ -28,9 +29,12 @@ const extractDocumentContentFlow = ai.defineFlow(
   },
   async (input) => {
     const media = "data" in input.document ? { url: input.document.data } : { url: input.document.url };
-    const result = await ai.extractText(
-        { media },
-    );
+    const result = await ai.generate({
+      prompt: [
+        {text: 'Extract the text from this document.'},
+        {media},
+      ]
+    });
     return { content: result.text || '' };
   }
 );
