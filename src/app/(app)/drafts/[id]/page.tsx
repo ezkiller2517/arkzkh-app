@@ -1,16 +1,16 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { v4 as uuidv4 } from 'uuid';
-import { Loader2, Sparkles, FileUp, Paperclip, Image as ImageIcon, Video, File as FileIcon } from 'lucide-react';
+import { Loader2, Sparkles, FileUp, Paperclip, Image as ImageIcon, Video, File as FileIcon, Trash2 } from 'lucide-react';
 import { useApp } from '@/components/app-provider';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import type { Draft } from '@/lib/types';
+import type { Draft, Attachment } from '@/lib/types';
 import { scoreContentAlignment } from '@/ai/flows/score-content-alignment';
 import type { ScoreContentAlignmentOutput } from '@/ai/types';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
@@ -24,17 +24,23 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { contentTemplates } from '@/lib/templates';
+import { useFirebase } from '@/firebase';
+import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
 
 export default function DraftEditorPage({ params }: { params: { id: string } }) {
   const router = useRouter();
   const { getDraft, saveDraft, userData, submitDraft, approveDraft, rejectDraft, blueprint } = useApp();
+  const { storage } = useFirebase();
   const { toast } = useToast();
   const { id } = params;
 
   const [draft, setDraft] = useState<Partial<Draft> | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isScoring, setIsScoring] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const [aiResult, setAiResult] = useState<ScoreContentAlignmentOutput | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
 
   useEffect(() => {
     if (id === 'new') {
@@ -125,6 +131,62 @@ export default function DraftEditorPage({ params }: { params: { id: string } }) 
     }
   }
 
+  const handleUploadClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (!event.target.files || event.target.files.length === 0) {
+      return;
+    }
+    if (!draft?.id || !userData?.organizationId) {
+        toast({ title: 'Cannot upload file', description: 'Draft or organization not properly loaded.', variant: 'destructive' });
+        return;
+    }
+
+    const file = event.target.files[0];
+    setIsUploading(true);
+
+    try {
+      const filePath = `organizations/${userData.organizationId}/drafts/${draft.id}/${file.name}`;
+      const fileStorageRef = storageRef(storage, filePath);
+      
+      const snapshot = await uploadBytes(fileStorageRef, file);
+      const downloadURL = await getDownloadURL(snapshot.ref);
+
+      const newAttachment: Attachment = {
+        name: file.name,
+        url: downloadURL,
+        type: file.type,
+      };
+      
+      const updatedAttachments = [...(draft.attachments || []), newAttachment];
+      setDraft(d => d ? { ...d, attachments: updatedAttachments } : null);
+      
+      // Auto-save the draft with the new attachment
+      saveDraft({ id: draft.id, attachments: updatedAttachments });
+
+      toast({ title: 'File Uploaded', description: `${file.name} has been attached.` });
+
+    } catch (error) {
+      console.error("File upload error:", error);
+      toast({ title: 'Upload Failed', description: 'Could not upload the file.', variant: 'destructive' });
+    } finally {
+      setIsUploading(false);
+      // Reset file input
+      if(fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handleRemoveAttachment = (url: string) => {
+    if (!draft?.id) return;
+
+    const updatedAttachments = draft.attachments?.filter(att => att.url !== url) || [];
+    setDraft(d => d ? { ...d, attachments: updatedAttachments } : null);
+    saveDraft({ id: draft.id, attachments: updatedAttachments });
+     toast({ title: 'Attachment Removed' });
+  }
+
   if (!draft) {
     return <div className="flex justify-center items-center h-screen"><Loader2 className="h-8 w-8 animate-spin" /></div>;
   }
@@ -179,8 +241,9 @@ export default function DraftEditorPage({ params }: { params: { id: string } }) 
         <div className="space-y-4">
             <div className="flex items-center gap-4">
                 <h2 className="text-lg font-semibold">Attachments</h2>
-                <Button variant="outline" size="sm" disabled={!canEdit}>
-                    <FileUp className="mr-2 h-4 w-4" />
+                <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" />
+                <Button variant="outline" size="sm" onClick={handleUploadClick} disabled={!canEdit || isUploading}>
+                    {isUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileUp className="mr-2 h-4 w-4" />}
                     Upload Media
                 </Button>
             </div>
@@ -188,7 +251,7 @@ export default function DraftEditorPage({ params }: { params: { id: string } }) 
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                     {draft.attachments.map((file, index) => (
                         <div key={index} className="relative group border rounded-lg overflow-hidden">
-                            {file.type.startsWith('image/') ? (
+                             {file.type.startsWith('image/') ? (
                                 <img src={file.url} alt={file.name} className="h-32 w-full object-cover" />
                             ) : file.type.startsWith('video/') ? (
                                 <div className="h-32 w-full bg-black flex items-center justify-center">
@@ -202,6 +265,16 @@ export default function DraftEditorPage({ params }: { params: { id: string } }) 
                              <div className="absolute bottom-0 left-0 right-0 bg-black/50 p-2 text-white text-xs truncate">
                                 {file.name}
                             </div>
+                            {canEdit && (
+                                <Button
+                                variant="destructive"
+                                size="icon"
+                                className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover:opacity-100"
+                                onClick={() => handleRemoveAttachment(file.url)}
+                                >
+                                    <Trash2 className="h-4 w-4" />
+                                </Button>
+                            )}
                         </div>
                     ))}
                 </div>
