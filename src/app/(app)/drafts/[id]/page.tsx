@@ -17,11 +17,10 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import { Progress } from '@/components/ui/progress';
 import { serverTimestamp } from 'firebase/firestore';
 
-export default function DraftEditorPage({ params }: { params: { id: string } }) {
+export default function DraftEditorPage({ params: { id } }: { params: { id: string } }) {
   const router = useRouter();
   const { getDraft, saveDraft, userData, submitDraft, approveDraft, rejectDraft, blueprint } = useApp();
   const { toast } = useToast();
-  const { id } = params;
 
   const [draft, setDraft] = useState<Partial<Draft> | null>(null);
   const [isSaving, setIsSaving] = useState(false);
