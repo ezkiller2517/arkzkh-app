@@ -27,13 +27,12 @@ import { contentTemplates } from '@/lib/templates';
 import { useFirebase, useStorage } from '@/firebase';
 import { ref as storageRef, uploadBytesResumable, getDownloadURL, deleteObject } from "firebase/storage";
 
-export default function DraftEditorPage({ params }: { params: { id: string } }) {
+export default function DraftEditorPage({ params: { id } }: { params: { id: string } }) {
   const router = useRouter();
   const { getDraft, userData, submitDraft, approveDraft, rejectDraft, blueprint } = useApp();
   const { firestore } = useFirebase();
   const storage = useStorage();
   const { toast } = useToast();
-  const { id } = params;
 
   const [draft, setDraft] = useState<Partial<Draft> | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -419,5 +418,3 @@ export default function DraftEditorPage({ params }: { params: { id: string } }) 
     </div>
   );
 }
-
-    
