@@ -1,39 +1,58 @@
 export const Icons = {
   Logo: () => (
-    <div className="flex flex-col items-center justify-center text-primary">
+    <div className="flex flex-col items-center justify-center p-2">
       <svg
-        width="150"
-        height="40"
-        viewBox="0 0 150 40"
+        width="140"
+        height="60"
+        viewBox="0 0 140 60"
         className="text-sidebar-foreground"
       >
         <defs>
           <linearGradient id="logo-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" style={{ stopColor: 'hsl(var(--primary))' }} />
-            <stop offset="100%" style={{ stopColor: 'hsl(var(--accent))' }} />
+            <stop offset="0%" stopColor="hsl(var(--primary))" />
+            <stop offset="100%" stopColor="hsl(var(--accent))" />
           </linearGradient>
         </defs>
+        
+        {/* Arc */}
         <path
-          d="M20,30 A60,60 0 0,1 130,30"
+          d="M20,35 A60,60 0 0,1 120,35"
           stroke="url(#logo-gradient)"
-          strokeWidth="2"
+          strokeWidth="1.5"
           fill="none"
         />
-        <circle cx="20" cy="30" r="1.5" fill="hsl(var(--primary))" />
-        <circle cx="130" cy="30" r="1.5" fill="hsl(var(--accent))" />
-        <circle cx="50" cy="11.5" r="1" fill="url(#logo-gradient)" />
-        <circle cx="75" cy="10" r="1" fill="url(#logo-gradient)" />
-        <circle cx="100" cy="11.5" r="1" fill="url(#logo-gradient)" />
+        
+        {/* Dots on arc */}
+        <circle cx="22" cy="33.5" r="0.8" fill="hsl(var(--primary))" />
+        <circle cx="45" cy="19" r="0.8" fill="url(#logo-gradient)" />
+        <circle cx="70" cy="15" r="0.8" fill="url(#logo-gradient)" />
+        <circle cx="95" cy="19" r="0.8" fill="url(#logo-gradient)" />
+        <circle cx="118" cy="33.5" r="0.8" fill="hsl(var(--accent))" />
+
+        {/* Text */}
+        <text
+          x="70"
+          y="38"
+          fontFamily="Space Grotesk, sans-serif"
+          fontSize="20"
+          fontWeight="bold"
+          fill="hsl(var(--sidebar-foreground))"
+          textAnchor="middle"
+        >
+          ARK-Z
+        </text>
+        <text
+          x="70"
+          y="52"
+          fontFamily="Inter, sans-serif"
+          fontSize="6"
+          fill="hsl(var(--muted-foreground))"
+          textAnchor="middle"
+          className="group-data-[collapsible=icon]:hidden"
+        >
+          Corporate communication from A-Z
+        </text>
       </svg>
-      <div
-        className="flex items-center justify-center gap-2 font-headline text-lg font-bold"
-        style={{ marginTop: -32 }}
-      >
-        <span>ARK-Z</span>
-      </div>
-      <p className="text-xs text-muted-foreground mt-2 group-data-[collapsible=icon]:hidden">
-        Knowledge Hub
-      </p>
     </div>
   ),
 };
