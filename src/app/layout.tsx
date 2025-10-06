@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { FirebaseClientProvider } from '@/firebase';
 import { AppProvider } from '@/components/app-provider';
 import { Toaster } from '@/components/ui/toaster';
 import { cn } from '@/lib/utils';
@@ -30,10 +31,12 @@ export default function RootLayout({
           'min-h-screen bg-background'
         )}
       >
-        <AppProvider>
-          {children}
-          <Toaster />
-        </AppProvider>
+        <FirebaseClientProvider>
+          <AppProvider>
+            {children}
+            <Toaster />
+          </AppProvider>
+        </FirebaseClientProvider>
       </body>
     </html>
   );

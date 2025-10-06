@@ -15,10 +15,11 @@ import { scoreContentAlignment } from '@/ai/flows/score-content-alignment';
 import type { ScoreContentAlignmentOutput } from '@/ai/types';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Progress } from '@/components/ui/progress';
+import { serverTimestamp } from 'firebase/firestore';
 
 export default function DraftEditorPage({ params }: { params: { id: string } }) {
   const router = useRouter();
-  const { getDraft, saveDraft, role, submitDraft, approveDraft, rejectDraft, blueprint } = useApp();
+  const { getDraft, saveDraft, userData, submitDraft, approveDraft, rejectDraft, blueprint } = useApp();
   const { toast } = useToast();
 
   const [draft, setDraft] = useState<Partial<Draft> | null>(null);
@@ -42,8 +43,9 @@ export default function DraftEditorPage({ params }: { params: { id: string } }) 
           });
         }
       } else {
-        toast({ title: 'Draft not found', variant: 'destructive' });
-        router.push('/drafts');
+        // Data might still be loading, don't toast immediately
+        // toast({ title: 'Draft not found', variant: 'destructive' });
+        // router.push('/drafts');
       }
     }
   }, [params.id, getDraft, router, toast]);
@@ -54,8 +56,15 @@ export default function DraftEditorPage({ params }: { params: { id: string } }) 
         return;
     };
     setIsSaving(true);
-    await new Promise(res => setTimeout(res, 500)); // Simulate async save
-    saveDraft({ id: draft.id, title: draft.title, content: draft.content });
+    const draftData = {
+        id: draft.id,
+        title: draft.title,
+        content: draft.content,
+        author: userData?.displayName || 'Unknown Author',
+        status: draft.status || 'Draft',
+        createdAt: draft.createdAt || serverTimestamp()
+    }
+    saveDraft(draftData);
     setIsSaving(false);
     if (params.id === 'new') {
         router.replace(`/drafts/${draft.id}`);
@@ -103,7 +112,7 @@ export default function DraftEditorPage({ params }: { params: { id: string } }) 
     return <div className="flex justify-center items-center h-screen"><Loader2 className="h-8 w-8 animate-spin" /></div>;
   }
 
-  const canEdit = role === 'Admin' || (role === 'Approver' && draft.status === 'In Review') || (role === 'Contributor' && draft.status === 'Draft');
+  const canEdit = userData?.role === 'Admin' || (userData?.role === 'Approver' && draft.status === 'In Review') || (userData?.role === 'Contributor' && draft.status === 'Draft');
 
   return (
     <div className="flex flex-col lg:flex-row h-full">
@@ -111,8 +120,8 @@ export default function DraftEditorPage({ params }: { params: { id: string } }) 
         <div className="flex items-center justify-between">
             <h1 className="text-2xl font-bold tracking-tight font-headline">Draft Editor</h1>
             <div className="flex items-center gap-2">
-                {role === 'Contributor' && draft.status === 'Draft' && <Button onClick={() => draft.id && submitDraft(draft.id)}>Submit for Review</Button>}
-                { (role === 'Approver' || role === 'Admin') && draft.status === 'In Review' && (
+                {userData?.role === 'Contributor' && draft.status === 'Draft' && <Button onClick={() => draft.id && submitDraft(draft.id)}>Submit for Review</Button>}
+                { (userData?.role === 'Approver' || userData?.role === 'Admin') && draft.status === 'In Review' && (
                     <>
                         <Button variant="destructive" onClick={() => draft.id && rejectDraft(draft.id, 'Needs improvement')}>Reject</Button>
                         <Button onClick={() => draft.id && approveDraft(draft.id)}>Approve</Button>

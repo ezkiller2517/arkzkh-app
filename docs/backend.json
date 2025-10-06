@@ -19,6 +19,10 @@
           "type": "string",
           "description": "User's display name."
         },
+        "photoURL": {
+            "type": "string",
+            "description": "URL of the user's profile picture."
+        },
         "role": {
           "type": "string",
           "description": "The role of the user (e.g., Contributor, Approver, Admin)."
@@ -31,9 +35,7 @@
       "required": [
         "id",
         "email",
-        "displayName",
-        "role",
-        "organizationId"
+        "displayName"
       ]
     },
     "Organization": {
@@ -313,8 +315,7 @@
   },
   "auth": {
     "providers": [
-      "password",
-      "anonymous"
+      "google.com"
     ]
   },
   "firestore": {

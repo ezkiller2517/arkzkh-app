@@ -10,8 +10,8 @@ export type Draft = {
   content: string;
   status: DraftStatus;
   author: string;
-  createdAt: string;
-  updatedAt: string;
+  createdAt: any; // Allow serverTimestamp
+  updatedAt: any; // Allow serverTimestamp
   alignmentScore?: number;
   feedback?: string;
   suggestions?: string[];
@@ -27,3 +27,12 @@ export type CalendarEvent = {
 };
 
 export type UserRole = 'Contributor' | 'Approver' | 'Admin';
+
+export interface UserData {
+    id: string;
+    displayName: string;
+    email: string;
+    photoURL?: string;
+    organizationId?: string;
+    role?: UserRole;
+}

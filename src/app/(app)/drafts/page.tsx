@@ -13,6 +13,13 @@ import { formatDistanceToNow } from 'date-fns';
 export default function DraftsPage() {
   const { drafts } = useApp();
 
+  const formatDate = (timestamp: any) => {
+    if (timestamp && timestamp.toDate) {
+      return formatDistanceToNow(timestamp.toDate(), { addSuffix: true });
+    }
+    return 'N/A';
+  }
+
   return (
     <div className="container mx-auto p-4 md:p-8">
       <header className="flex items-center justify-between mb-8">
@@ -60,7 +67,7 @@ export default function DraftsPage() {
                       {draft.alignmentScore ? `${(draft.alignmentScore * 100).toFixed(0)}%` : 'N/A'}
                     </TableCell>
                     <TableCell className="hidden md:table-cell">
-                      {formatDistanceToNow(new Date(draft.updatedAt), { addSuffix: true })}
+                      {formatDate(draft.updatedAt)}
                     </TableCell>
                     <TableCell>
                       <Link href={`/drafts/${draft.id}`}>

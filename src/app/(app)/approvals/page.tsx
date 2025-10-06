@@ -9,16 +9,23 @@ import { Badge } from '@/components/ui/badge';
 import { formatDistanceToNow } from 'date-fns';
 
 export default function ApprovalsPage() {
-  const { drafts, role } = useApp();
+  const { drafts, userData } = useApp();
   const draftsForReview = drafts.filter(draft => draft.status === 'In Review');
 
-  if (role === 'Contributor') {
+  if (userData?.role === 'Contributor') {
     return (
       <div className="container mx-auto p-4 md:p-8 text-center">
         <h1 className="text-2xl font-bold mb-4">Access Denied</h1>
         <p>You do not have permission to view this page.</p>
       </div>
     );
+  }
+
+  const formatDate = (timestamp: any) => {
+    if (timestamp && timestamp.toDate) {
+      return formatDistanceToNow(timestamp.toDate(), { addSuffix: true });
+    }
+    return 'N/A';
   }
 
   return (
@@ -54,7 +61,7 @@ export default function ApprovalsPage() {
                       {draft.alignmentScore ? `${(draft.alignmentScore * 100).toFixed(0)}%` : 'N/A'}
                     </TableCell>
                     <TableCell className="hidden md:table-cell">
-                      {formatDistanceToNow(new Date(draft.updatedAt), { addSuffix: true })}
+                      {formatDate(draft.updatedAt)}
                     </TableCell>
                     <TableCell>
                       <Link href={`/drafts/${draft.id}`}>

@@ -18,6 +18,13 @@ export default function DashboardPage() {
   const bannerImage = PlaceHolderImages.find(img => img.id === 'dashboard-banner');
   const overallAlignment = drafts.filter(d => d.alignmentScore).reduce((acc, d) => acc + (d.alignmentScore || 0), 0) / drafts.filter(d => d.alignmentScore).length || 0;
 
+   const formatDate = (timestamp: any) => {
+    if (timestamp && timestamp.toDate) {
+      return format(timestamp.toDate(), 'P');
+    }
+    return 'N/A';
+  }
+
   return (
     <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
       <div className="flex items-center justify-between space-y-2">
@@ -133,7 +140,7 @@ export default function DashboardPage() {
                     } className={cn(draft.status === 'Approved' && 'bg-green-600')}>{draft.status}</Badge>
                   </TableCell>
                   <TableCell>{draft.alignmentScore ? `${(draft.alignmentScore * 100).toFixed(0)}%` : 'N/A'}</TableCell>
-                  <TableCell>{format(new Date(draft.updatedAt), 'P')}</TableCell>
+                  <TableCell>{formatDate(draft.updatedAt)}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
