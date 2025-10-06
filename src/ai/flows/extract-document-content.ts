@@ -40,16 +40,23 @@ const extractDocumentContentFlow = ai.defineFlow(
       content = result.text || '';
     } else {
       // It's a URL, fetch the content first.
-      const response = await fetch(input.document.url);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch URL: ${response.statusText}`);
+      try {
+        const response = await fetch(input.document.url);
+        if (!response.ok) {
+          throw new Error(`Failed to fetch URL: ${response.statusText}`);
+        }
+        const htmlContent = await response.text();
+        // Now ask the AI to extract text from the HTML content.
+        const result = await ai.generate({
+          prompt: `Extract the main text content from the following HTML: \n\n${htmlContent}`,
+        });
+        content = result.text || '';
+      } catch (error: any) {
+        if (error instanceof TypeError && error.message.includes('fetch failed')) {
+            throw new Error(`Failed to fetch the URL: ${input.document.url}. Please ensure it is correct and publicly accessible.`);
+        }
+        throw error;
       }
-      const htmlContent = await response.text();
-      // Now ask the AI to extract text from the HTML content.
-      const result = await ai.generate({
-        prompt: `Extract the main text content from the following HTML: \n\n${htmlContent}`,
-      });
-      content = result.text || '';
     }
 
     return { content };
