@@ -160,7 +160,7 @@ export default function DraftEditorPage({ params }: { params: { id: string } }) 
       },
       (error) => {
         console.error("File upload error:", error);
-        toast({ title: 'Upload Failed', description: 'Could not upload the file.', variant: 'destructive' });
+        toast({ title: 'Upload Failed', description: 'Could not upload the file. Check storage rules.', variant: 'destructive' });
         setIsUploading(false);
         setUploadProgress(0);
       },
