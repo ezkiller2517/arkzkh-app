@@ -54,7 +54,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <SidebarProvider>
       <Sidebar>
-        <SidebarHeader className="py-6">
+        <SidebarHeader>
           <Link href="/dashboard" className="block">
             <Icons.Logo />
           </Link>
