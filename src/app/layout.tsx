@@ -5,8 +5,8 @@ import { cn } from '@/lib/utils';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'AlignmentOS',
-  description: 'AI-Powered Strategic Alignment',
+  title: 'ARK-Z Knowledge Hub',
+  description: 'Corporate Communication from A-Z',
 };
 
 export default function RootLayout({
