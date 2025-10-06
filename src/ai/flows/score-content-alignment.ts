@@ -7,28 +7,15 @@
  * suggested actions, and rationale in a structured JSON format.
  *
  * - scoreContentAlignment - The main function to trigger the content alignment scoring flow.
- * - ScoreContentAlignmentInput - The input type for the scoreContentAlignment function.
- * - ScoreContentAlignmentOutput - The output type for the scoreContentAlignment function.
  */
 
 import {ai} from '@/ai/genkit';
-import {z} from 'genkit';
-
-
-const ScoreContentAlignmentInputSchema = z.object({
-  content: z.string().describe('The content to be scored for alignment.'),
-  strategicBlueprint: z.string().describe('The strategic blueprint to align the content against.  This should include elements such as vision, mission, values, objectives, pillars, and taxonomy terms.'),
-});
-export type ScoreContentAlignmentInput = z.infer<typeof ScoreContentAlignmentInputSchema>;
-
-const ScoreContentAlignmentOutputSchema = z.object({
-  alignmentScore: z.number().min(0).max(1).describe('The alignment score between 0 and 1.'),
-  feedback: z.string().describe('Feedback on what to fix to improve alignment.'),
-  suggestedActions: z.array(z.string()).describe('Suggested actions to take to improve alignment.'),
-  rationale: z.string().describe('Rationale for the alignment score and feedback.'),
-});
-export type ScoreContentAlignmentOutput = z.infer<typeof ScoreContentAlignmentOutputSchema>;
-
+import {
+  ScoreContentAlignmentInput,
+  ScoreContentAlignmentInputSchema,
+  ScoreContentAlignmentOutput,
+  ScoreContentAlignmentOutputSchema,
+} from '@/ai/types';
 
 export async function scoreContentAlignment(input: ScoreContentAlignmentInput): Promise<ScoreContentAlignmentOutput> {
   return scoreContentAlignmentFlow(input);

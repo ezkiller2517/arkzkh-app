@@ -1,4 +1,4 @@
-import type { ExtractStrategicBlueprintOutput } from "@/ai/flows/extract-strategic-blueprint";
+import type { ExtractStrategicBlueprintOutput } from "@/ai/types";
 
 export type StrategicBlueprint = ExtractStrategicBlueprintOutput;
 

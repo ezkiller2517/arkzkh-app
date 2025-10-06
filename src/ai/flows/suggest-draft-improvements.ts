@@ -4,42 +4,15 @@
  * @fileOverview An AI agent that suggests improvements to a draft document based on a strategic blueprint.
  *
  * - suggestDraftImprovements - A function that takes a draft document and a strategic blueprint and returns suggestions for improvement.
- * - SuggestDraftImprovementsInput - The input type for the suggestDraftImprovements function.
- * - SuggestDraftImprovementsOutput - The return type for the suggestDraftImprovements function.
  */
 
 import {ai} from '@/ai/genkit';
-import {z} from 'genkit';
-
-const SuggestDraftImprovementsInputSchema = z.object({
-  draftContent: z
-    .string()
-    .describe('The content of the draft document to be improved.'),
-  strategicBlueprint: z
-    .string()
-    .describe(
-      'The strategic blueprint of the organization, including vision, mission, values, objectives, pillars, and taxonomy terms.'
-    ),
-});
-export type SuggestDraftImprovementsInput = z.infer<
-  typeof SuggestDraftImprovementsInputSchema
->;
-
-const SuggestDraftImprovementsOutputSchema = z.object({
-  suggestions: z
-    .array(z.string())
-    .describe(
-      'A list of AI-driven suggestions for improving the draft content to better align with the strategic blueprint.'
-    ),
-  rationale: z
-    .string()
-    .describe(
-      'A rationale for each suggestion, explaining why the suggestion would improve alignment.'
-    ),
-});
-export type SuggestDraftImprovementsOutput = z.infer<
-  typeof SuggestDraftImprovementsOutputSchema
->;
+import {
+  SuggestDraftImprovementsInput,
+  SuggestDraftImprovementsInputSchema,
+  SuggestDraftImprovementsOutput,
+  SuggestDraftImprovementsOutputSchema,
+} from '@/ai/types';
 
 export async function suggestDraftImprovements(
   input: SuggestDraftImprovementsInput

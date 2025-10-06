@@ -12,7 +12,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import type { Draft } from '@/lib/types';
 import { scoreContentAlignment } from '@/ai/flows/score-content-alignment';
-import type { ScoreContentAlignmentOutput } from '@/ai/flows/score-content-alignment';
+import type { ScoreContentAlignmentOutput } from '@/ai/types';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Progress } from '@/components/ui/progress';
 
