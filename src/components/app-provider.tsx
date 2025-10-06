@@ -17,7 +17,7 @@ interface AppContextType {
   saveBlueprint: (blueprint: StrategicBlueprint) => void;
   drafts: Draft[];
   getDraft: (id: string) => Draft | undefined;
-  saveDraft: (draft: Partial<Draft> & { id: string }) => void;
+  updateDraftStatus: (id: string, status: DraftStatus, message: string) => void;
   submitDraft: (id: string) => void;
   approveDraft: (id: string) => void;
   rejectDraft: (id: string, feedback: string) => void;
@@ -86,16 +86,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const getDraft = useCallback((id: string) => drafts?.find(d => d.id === id), [drafts]);
 
-  const saveDraft = useCallback((draftUpdate: Partial<Draft> & { id: string }) => {
-    if (!draftsColRef) return;
-    const docRef = doc(draftsColRef, draftUpdate.id);
-    setDocumentNonBlocking(docRef, { ...draftUpdate, updatedAt: serverTimestamp() }, { merge: true });
-     toast({
-        title: "Draft Saved",
-        description: `Draft "${draftUpdate.title || 'Untitled'}" has been saved.`,
-      });
-  }, [draftsColRef, toast]);
-
   const updateDraftStatus = useCallback((id: string, status: DraftStatus, message: string) => {
      if (!draftsColRef) return;
      const docRef = doc(draftsColRef, id);
@@ -121,7 +111,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     saveBlueprint,
     drafts: drafts || [],
     getDraft,
-    saveDraft,
+    updateDraftStatus,
     submitDraft,
     approveDraft,
     rejectDraft,

@@ -15,7 +15,7 @@ import { scoreContentAlignment } from '@/ai/flows/score-content-alignment';
 import type { ScoreContentAlignmentOutput } from '@/ai/types';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Progress } from '@/components/ui/progress';
-import { serverTimestamp } from 'firebase/firestore';
+import { serverTimestamp, doc, setDoc } from 'firebase/firestore';
 import {
   Select,
   SelectContent,
@@ -29,8 +29,8 @@ import { ref as storageRef, uploadBytesResumable, getDownloadURL } from "firebas
 
 export default function DraftEditorPage({ params }: { params: { id: string } }) {
   const router = useRouter();
-  const { getDraft, saveDraft, userData, submitDraft, approveDraft, rejectDraft, blueprint } = useApp();
-  const { storage } = useFirebase();
+  const { getDraft, userData, submitDraft, approveDraft, rejectDraft, blueprint } = useApp();
+  const { storage, firestore } = useFirebase();
   const { toast } = useToast();
   const id = params.id;
 
@@ -41,6 +41,12 @@ export default function DraftEditorPage({ params }: { params: { id: string } }) 
   const [uploadProgress, setUploadProgress] = useState(0);
   const [aiResult, setAiResult] = useState<ScoreContentAlignmentOutput | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const saveDraft = (draftData: Partial<Draft> & { id: string }) => {
+    if (!userData?.organizationId) return;
+    const docRef = doc(firestore, 'organizations', userData.organizationId, 'contentObjects', draftData.id);
+    return setDoc(docRef, { ...draftData, updatedAt: serverTimestamp() }, { merge: true });
+  };
 
 
   useEffect(() => {
@@ -59,8 +65,6 @@ export default function DraftEditorPage({ params }: { params: { id: string } }) 
             justification: existingDraft.justification || '',
           });
         }
-      } else {
-        // Data might still be loading
       }
     }
   }, [id, getDraft]);
@@ -87,7 +91,8 @@ export default function DraftEditorPage({ params }: { params: { id: string } }) 
         createdAt: draft.createdAt || serverTimestamp(),
         attachments: draft.attachments || [],
     }
-    saveDraft(draftData);
+    await saveDraft(draftData);
+    toast({ title: 'Draft Saved', description: `Draft "${draft.title}" has been saved.` });
     setIsSaving(false);
     if (id === 'new') {
         router.replace(`/drafts/${draft.id}`);
@@ -114,7 +119,7 @@ export default function DraftEditorPage({ params }: { params: { id: string } }) 
         });
         setAiResult(result);
         if (draft.id) {
-            saveDraft({
+            await saveDraft({
                 id: draft.id,
                 alignmentScore: result.alignmentScore,
                 feedback: result.feedback,
@@ -146,10 +151,12 @@ export default function DraftEditorPage({ params }: { params: { id: string } }) 
     }
 
     const file = event.target.files[0];
+    const currentDraftId = draft.id; // Capture id to avoid race conditions with state updates
+    
     setIsUploading(true);
     setUploadProgress(0);
 
-    const filePath = `organizations/${userData.organizationId}/drafts/${draft.id}/${file.name}`;
+    const filePath = `organizations/${userData.organizationId}/drafts/${currentDraftId}/${file.name}`;
     const fileStorageRef = storageRef(storage, filePath);
     const uploadTask = uploadBytesResumable(fileStorageRef, file);
 
@@ -160,7 +167,7 @@ export default function DraftEditorPage({ params }: { params: { id: string } }) 
       },
       (error) => {
         console.error("File upload error:", error);
-        toast({ title: 'Upload Failed', description: 'Could not upload the file. Check storage rules.', variant: 'destructive' });
+        toast({ title: 'Upload Failed', description: error.message || 'Could not upload the file. Check storage rules.', variant: 'destructive' });
         setIsUploading(false);
         setUploadProgress(0);
       },
@@ -172,10 +179,13 @@ export default function DraftEditorPage({ params }: { params: { id: string } }) 
           type: file.type,
         };
         
-        const updatedAttachments = [...(draft.attachments || []), newAttachment];
+        // Fetch the most recent version of the draft before updating
+        const latestDraft = getDraft(currentDraftId) || draft;
+        const updatedAttachments = [...(latestDraft.attachments || []), newAttachment];
+
         setDraft(d => d ? { ...d, attachments: updatedAttachments } : null);
         
-        saveDraft({ id: draft.id!, attachments: updatedAttachments });
+        await saveDraft({ id: currentDraftId, attachments: updatedAttachments });
 
         toast({ title: 'File Uploaded', description: `${file.name} has been attached.` });
 
