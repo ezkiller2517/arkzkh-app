@@ -32,7 +32,7 @@ export default function DraftEditorPage({ params }: { params: { id: string } }) 
   const { getDraft, saveDraft, userData, submitDraft, approveDraft, rejectDraft, blueprint } = useApp();
   const { storage } = useFirebase();
   const { toast } = useToast();
-  const { id } = params;
+  const id = params.id;
 
   const [draft, setDraft] = useState<Partial<Draft> | null>(null);
   const [isSaving, setIsSaving] = useState(false);
