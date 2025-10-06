@@ -5,7 +5,7 @@ export const Icons = {
         width="140"
         height="60"
         viewBox="0 0 140 60"
-        className="text-sidebar-foreground"
+        className="text-foreground"
       >
         <defs>
           <linearGradient id="logo-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
@@ -36,7 +36,7 @@ export const Icons = {
           fontFamily="Space Grotesk, sans-serif"
           fontSize="20"
           fontWeight="bold"
-          fill="hsl(var(--sidebar-foreground))"
+          fill="currentColor"
           textAnchor="middle"
         >
           ARK-Z
