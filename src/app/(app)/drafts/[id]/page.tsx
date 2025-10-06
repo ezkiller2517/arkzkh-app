@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { v4 as uuidv4 } from 'uuid';
-import { Loader2, Sparkles, AlertTriangle, CheckCircle } from 'lucide-react';
+import { Loader2, Sparkles, FileUp } from 'lucide-react';
 import { useApp } from '@/components/app-provider';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -16,6 +16,14 @@ import type { ScoreContentAlignmentOutput } from '@/ai/types';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Progress } from '@/components/ui/progress';
 import { serverTimestamp } from 'firebase/firestore';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { contentTemplates } from '@/lib/templates';
 
 export default function DraftEditorPage({ params: { id } }: { params: { id: string } }) {
   const router = useRouter();
@@ -40,15 +48,21 @@ export default function DraftEditorPage({ params: { id } }: { params: { id: stri
             feedback: existingDraft.feedback || '',
             suggestedActions: existingDraft.suggestions || [],
             rationale: existingDraft.rationale || '',
+            justification: existingDraft.justification || '',
           });
         }
       } else {
-        // Data might still be loading, don't toast immediately
-        // toast({ title: 'Draft not found', variant: 'destructive' });
-        // router.push('/drafts');
+        // Data might still be loading
       }
     }
-  }, [id, getDraft, router, toast]);
+  }, [id, getDraft]);
+  
+  const handleTemplateChange = (templateId: string) => {
+    const template = contentTemplates[templateId];
+    if (template) {
+      setDraft(d => d ? { ...d, content: template.content } : null);
+    }
+  };
 
   const handleSave = async () => {
     if (!draft?.id || !draft.title) {
@@ -96,7 +110,8 @@ export default function DraftEditorPage({ params: { id } }: { params: { id: stri
                 alignmentScore: result.alignmentScore,
                 feedback: result.feedback,
                 suggestions: result.suggestedActions,
-                rationale: result.rationale
+                rationale: result.rationale,
+                justification: result.justification
             });
         }
         toast({ title: 'Scoring Complete', description: `Alignment score: ${(result.alignmentScore * 100).toFixed(0)}%`});
@@ -117,7 +132,7 @@ export default function DraftEditorPage({ params: { id } }: { params: { id: stri
   return (
     <div className="flex flex-col lg:flex-row h-full">
       <div className="flex-1 p-4 md:p-6 space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between flex-wrap gap-2">
             <h1 className="text-2xl font-bold tracking-tight font-headline">Draft Editor</h1>
             <div className="flex items-center gap-2">
                 {userData?.role === 'Contributor' && draft.status === 'Draft' && <Button onClick={() => draft.id && submitDraft(draft.id)}>Submit for Review</Button>}
@@ -133,13 +148,25 @@ export default function DraftEditorPage({ params: { id } }: { params: { id: stri
                 </Button>
             </div>
         </div>
-        <Input
-          placeholder="Draft title..."
-          value={draft.title || ''}
-          onChange={e => setDraft(d => d ? { ...d, title: e.target.value } : null)}
-          className="text-xl font-semibold"
-          disabled={!canEdit}
-        />
+         <div className="flex flex-col md:flex-row gap-4">
+          <Input
+            placeholder="Draft title..."
+            value={draft.title || ''}
+            onChange={e => setDraft(d => d ? { ...d, title: e.target.value } : null)}
+            className="text-xl font-semibold flex-grow"
+            disabled={!canEdit}
+          />
+          <Select onValueChange={handleTemplateChange} disabled={!canEdit}>
+            <SelectTrigger className="w-full md:w-[280px]">
+              <SelectValue placeholder="Select a template..." />
+            </SelectTrigger>
+            <SelectContent>
+              {Object.entries(contentTemplates).map(([id, { name }]) => (
+                <SelectItem key={id} value={id}>{name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
         <Textarea
           placeholder="Start writing your content here..."
           value={draft.content || ''}
@@ -170,14 +197,11 @@ export default function DraftEditorPage({ params: { id } }: { params: { id: stri
                                 <span className="font-bold text-primary text-lg">{(aiResult.alignmentScore * 100).toFixed(0)}%</span>
                             </div>
                             <Progress value={aiResult.alignmentScore * 100} />
+                            {aiResult.justification && <p className="text-sm text-muted-foreground italic mt-2">"{aiResult.justification}"</p>}
                         </div>
-                        <Accordion type="single" collapsible className="w-full" defaultValue="feedback">
-                            <AccordionItem value="feedback">
-                                <AccordionTrigger>Feedback</AccordionTrigger>
-                                <AccordionContent className="text-sm">{aiResult.feedback}</AccordionContent>
-                            </AccordionItem>
+                        <Accordion type="single" collapsible className="w-full" defaultValue="suggestions">
                             <AccordionItem value="suggestions">
-                                <AccordionTrigger>Suggested Actions</AccordionTrigger>
+                                <AccordionTrigger>Actionable Suggestions</AccordionTrigger>
                                 <AccordionContent>
                                     <ul className="list-disc pl-4 space-y-2 text-sm">
                                         {aiResult.suggestedActions.map((action, i) => <li key={i}>{action}</li>)}
@@ -185,7 +209,7 @@ export default function DraftEditorPage({ params: { id } }: { params: { id: stri
                                 </AccordionContent>
                             </AccordionItem>
                              <AccordionItem value="rationale">
-                                <AccordionTrigger>Rationale</AccordionTrigger>
+                                <AccordionTrigger>Detailed Rationale</AccordionTrigger>
                                 <AccordionContent className="text-sm">{aiResult.rationale}</AccordionContent>
                             </AccordionItem>
                         </Accordion>

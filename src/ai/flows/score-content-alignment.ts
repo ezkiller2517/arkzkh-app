@@ -25,22 +25,26 @@ const scoreContentAlignmentPrompt = ai.definePrompt({
   name: 'scoreContentAlignmentPrompt',
   input: {schema: ScoreContentAlignmentInputSchema},
   output: {schema: ScoreContentAlignmentOutputSchema},
-  prompt: `You are an AI assistant specialized in scoring content alignment against a strategic blueprint.
+  prompt: `As a corporate communications strategist, evaluate the following DRAFT against the provided STRATEGIC BLUEPRINT. 
+  
+  Provide:
+  1. An alignment score from 0 to 1.
+  2. A concise, one-sentence justification for the score.
+  3. A list of 2-3 actionable suggestions for improving alignment.
+  4. A detailed rationale explaining the score and suggestions.
 
-  Given the following content and strategic blueprint, assess the alignment of the content with the blueprint.
-  Provide an alignment score between 0 and 1, feedback on what to fix, suggested actions, and a rationale for the score.
-  Return the output in a structured JSON format.
+  STRATEGIC BLUEPRINT: {{{strategicBlueprint}}}
+  
+  DRAFT CONTENT: {{{content}}}
 
-  Content: {{{content}}}
-  Strategic Blueprint: {{{strategicBlueprint}}}
-
-  Output the result as a JSON object matching the following schema.  Use descriptions to guide the content of each field:
+  Output the result as a JSON object matching the following schema. Use the descriptions to guide the content of each field:
   \`\`\`json
   { 
     "alignmentScore": "number between 0 and 1",
-    "feedback": "string",
-    "suggestedActions": "array of strings",
-    "rationale": "string"
+    "justification": "A concise, one-sentence justification for the score.",
+    "suggestedActions": "An array of 2-3 actionable suggestions for improvement.",
+    "rationale": "A detailed rationale explaining the score and suggestions.",
+    "feedback": "General feedback on what to fix."
   }
   \`\`\`
   `,
@@ -54,6 +58,10 @@ const scoreContentAlignmentFlow = ai.defineFlow(
   },
   async input => {
     const {output} = await scoreContentAlignmentPrompt(input);
+    // Ensure feedback is populated even if the model doesn't provide it, for backward compatibility
+    if (!output!.feedback) {
+      output!.feedback = output!.rationale;
+    }
     return output!;
   }
 );

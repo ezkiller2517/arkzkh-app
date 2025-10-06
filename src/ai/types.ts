@@ -70,16 +70,19 @@ export const ScoreContentAlignmentOutputSchema = z.object({
     .number()
     .min(0)
     .max(1)
-    .describe('The alignment score between 0 and 1.'),
-  feedback: z
+    .describe('The alignment score between 0 and 1, where 1 is perfect alignment.'),
+  justification: z
     .string()
-    .describe('Feedback on what to fix to improve alignment.'),
+    .describe('A concise, one-sentence justification for the score.'),
   suggestedActions: z
     .array(z.string())
-    .describe('Suggested actions to take to improve alignment.'),
+    .describe('A list of 2-3 actionable suggestions for improving alignment.'),
   rationale: z
     .string()
-    .describe('Rationale for the alignment score and feedback.'),
+    .describe('A detailed rationale explaining the score and suggestions.'),
+  feedback: z
+    .string()
+    .describe('General feedback on what to fix (for backward compatibility).'),
 });
 export type ScoreContentAlignmentOutput = z.infer<
   typeof ScoreContentAlignmentOutputSchema

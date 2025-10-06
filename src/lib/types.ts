@@ -20,6 +20,7 @@ export type Draft = {
   feedback?: string;
   suggestions?: string[];
   rationale?: string;
+  justification?: string;
 };
 
 export type CalendarEvent = {
