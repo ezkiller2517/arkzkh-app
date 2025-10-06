@@ -2,11 +2,11 @@ rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
-    // Allow public read access to all files. This allows anyone with the URL
-    // to view the files, which is common for web app assets.
+    // Allow read and write access to all paths for any authenticated user.
+    // This is a broad rule for debugging and initial development.
+    // In a production environment, you would want to restrict this further.
     match /{allPaths=**} {
-      allow read;
-      allow write: if request.auth != null;
+      allow read, write: if request.auth != null;
     }
   }
 }
