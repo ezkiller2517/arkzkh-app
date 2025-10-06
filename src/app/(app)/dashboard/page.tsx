@@ -11,6 +11,7 @@ import { alignmentTrendData, objectiveCoverageData, chartConfig } from '@/lib/da
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
+import { format } from 'date-fns';
 
 export default function DashboardPage() {
   const { drafts } = useApp();
@@ -132,7 +133,7 @@ export default function DashboardPage() {
                     } className={cn(draft.status === 'Approved' && 'bg-green-600')}>{draft.status}</Badge>
                   </TableCell>
                   <TableCell>{draft.alignmentScore ? `${(draft.alignmentScore * 100).toFixed(0)}%` : 'N/A'}</TableCell>
-                  <TableCell>{new Date(draft.updatedAt).toLocaleDateString()}</TableCell>
+                  <TableCell>{format(new Date(draft.updatedAt), 'P')}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
