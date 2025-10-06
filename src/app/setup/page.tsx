@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useFirebase } from '@/firebase';
+import { useFirebase, errorEmitter, FirestorePermissionError } from '@/firebase';
 import { doc, setDoc, writeBatch, serverTimestamp, collection } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -123,42 +123,52 @@ export default function SetupPage() {
 
     setIsLoading(true);
 
-    try {
-      const blueprint = await processAndExtractBlueprint();
-      
-      const batch = writeBatch(firestore);
+    const blueprint = await processAndExtractBlueprint();
+    
+    const batch = writeBatch(firestore);
 
-      // 1. Create Organization
-      const orgRef = doc(collection(firestore, 'organizations'));
-      batch.set(orgRef, { name: organizationName, id: orgRef.id });
+    // 1. Create Organization
+    const orgRef = doc(collection(firestore, 'organizations'));
+    const orgData = { name: organizationName, id: orgRef.id };
+    batch.set(orgRef, orgData);
 
-      // 2. Save Strategic Blueprint if extracted
-      if (blueprint) {
-          const blueprintRef = doc(collection(firestore, 'organizations', orgRef.id, 'strategicBlueprints'));
-          batch.set(blueprintRef, { ...blueprint, id: blueprintRef.id, createdAt: serverTimestamp() });
-      }
-
-      // 3. Update User Profile
-      const userRef = doc(firestore, 'users', user.uid);
-      const userData: UserData = {
-        id: user.uid,
-        displayName: user.displayName || 'Anonymous',
-        email: user.email || '',
-        photoURL: user.photoURL || '',
-        organizationId: orgRef.id,
-        role: role,
-      };
-      batch.set(userRef, userData, { merge: true });
-
-      await batch.commit();
-
-      toast({ title: "Setup complete!", description: `Welcome to ${organizationName}.` });
-      router.push('/dashboard');
-    } catch (error) {
-      console.error("Error during setup:", error);
-      toast({ title: "Setup failed", description: "Could not save initial information.", variant: "destructive" });
-      setIsLoading(false);
+    // 2. Save Strategic Blueprint if extracted
+    if (blueprint) {
+        const blueprintRef = doc(collection(firestore, 'organizations', orgRef.id, 'strategicBlueprints'));
+        const blueprintData = { ...blueprint, id: blueprintRef.id, createdAt: serverTimestamp() };
+        batch.set(blueprintRef, blueprintData);
     }
+
+    // 3. Update User Profile
+    const userRef = doc(firestore, 'users', user.uid);
+    const userData: UserData = {
+      id: user.uid,
+      displayName: user.displayName || 'Anonymous',
+      email: user.email || '',
+      photoURL: user.photoURL || '',
+      organizationId: orgRef.id,
+      role: role,
+    };
+    batch.set(userRef, userData, { merge: true });
+
+    batch.commit()
+      .then(() => {
+        toast({ title: "Setup complete!", description: `Welcome to ${organizationName}.` });
+        router.push('/dashboard');
+      })
+      .catch((serverError) => {
+        // Since we don't know which write in the batch failed,
+        // we will create a generic error for the most likely culprit: creating the organization.
+        const permissionError = new FirestorePermissionError({
+          path: orgRef.path,
+          operation: 'create',
+          requestResourceData: orgData,
+        });
+
+        // Emit the error for the listener to catch and display.
+        errorEmitter.emit('permission-error', permissionError);
+        setIsLoading(false);
+      });
   };
 
   const nextStep = () => setCurrentStep(s => Math.min(s + 1, STEPS.length));
