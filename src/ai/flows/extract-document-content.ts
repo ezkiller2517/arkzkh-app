@@ -28,13 +28,30 @@ const extractDocumentContentFlow = ai.defineFlow(
     outputSchema: DocumentOutputSchema,
   },
   async (input) => {
-    const media = "data" in input.document ? { url: input.document.data } : { url: input.document.url };
-    const result = await ai.generate({
-      prompt: [
-        {text: 'Extract the text from this document.'},
-        {media},
-      ]
-    });
-    return { content: result.text || '' };
+    let content: string;
+    if ('data' in input.document) {
+      // It's a file, pass the data URI directly.
+      const result = await ai.generate({
+        prompt: [
+          {text: 'Extract the text from this document.'},
+          {media: {url: input.document.data}},
+        ],
+      });
+      content = result.text || '';
+    } else {
+      // It's a URL, fetch the content first.
+      const response = await fetch(input.document.url);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch URL: ${response.statusText}`);
+      }
+      const htmlContent = await response.text();
+      // Now ask the AI to extract text from the HTML content.
+      const result = await ai.generate({
+        prompt: `Extract the main text content from the following HTML: \n\n${htmlContent}`,
+      });
+      content = result.text || '';
+    }
+
+    return { content };
   }
 );
