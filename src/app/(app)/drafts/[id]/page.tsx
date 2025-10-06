@@ -43,10 +43,19 @@ export default function DraftEditorPage({ params }: { params: { id: string } }) 
   const [aiResult, setAiResult] = useState<ScoreContentAlignmentOutput | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const saveDraft = (draftData: Partial<Draft> & { id: string }) => {
-    if (!userData?.organizationId) return;
+  const saveDraft = async (draftData: Partial<Draft> & { id: string }) => {
+    if (!userData?.organizationId) {
+        toast({ title: 'Error Saving', description: 'Organization data is not loaded.', variant: 'destructive' });
+        return;
+    };
     const docRef = doc(firestore, 'organizations', userData.organizationId, 'contentObjects', draftData.id);
-    return setDoc(docRef, { ...draftData, updatedAt: serverTimestamp() }, { merge: true });
+    try {
+        await setDoc(docRef, { ...draftData, updatedAt: serverTimestamp() }, { merge: true });
+    } catch (error: any) {
+        console.error("Error saving draft: ", error);
+        toast({ title: 'Save Failed', description: error.message || 'Could not save the draft.', variant: 'destructive' });
+        throw error; // re-throw to be caught by caller if needed
+    }
   };
 
 
@@ -92,11 +101,16 @@ export default function DraftEditorPage({ params }: { params: { id: string } }) 
         createdAt: draft.createdAt || serverTimestamp(),
         attachments: draft.attachments || [],
     }
-    await saveDraft(draftData);
-    toast({ title: 'Draft Saved', description: `Draft "${draft.title}" has been saved.` });
-    setIsSaving(false);
-    if (id === 'new') {
-        router.replace(`/drafts/${draft.id}`);
+    try {
+        await saveDraft(draftData);
+        toast({ title: 'Draft Saved', description: `Draft "${draft.title}" has been saved.` });
+        if (id === 'new') {
+            router.replace(`/drafts/${draft.id}`);
+        }
+    } catch (error) {
+        // Error is already toasted in saveDraft
+    } finally {
+        setIsSaving(false);
     }
   };
 
@@ -139,19 +153,38 @@ export default function DraftEditorPage({ params }: { params: { id: string } }) 
   }
 
   const handleUploadClick = () => {
+    if (id === 'new') {
+        toast({
+            title: 'Please Save Draft',
+            description: 'You must save the draft before you can upload attachments.',
+            variant: 'destructive',
+        });
+        return;
+    }
     fileInputRef.current?.click();
   };
 
-  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (!event.target.files || event.target.files.length === 0) {
       return;
     }
-    if (!draft?.id || !userData?.organizationId) {
-        toast({ title: 'Cannot upload file', description: 'Draft or organization not properly loaded. Please save the draft and try again.', variant: 'destructive' });
-        return;
-    }
 
     const file = event.target.files[0];
+
+    // Re-check conditions at time of upload
+    if (!draft?.id || id === 'new') {
+      toast({ title: 'Cannot upload file', description: 'Please save the draft first.', variant: 'destructive' });
+      return;
+    }
+    if (!userData?.organizationId) {
+      toast({ title: 'Cannot upload file', description: 'Organization not properly loaded.', variant: 'destructive' });
+      return;
+    }
+    if (!storage) {
+      toast({ title: 'Cannot upload file', description: 'Storage service is not available.', variant: 'destructive' });
+      return;
+    }
+
     const currentDraftId = draft.id;
     
     setIsUploading(true);
@@ -167,31 +200,52 @@ export default function DraftEditorPage({ params }: { params: { id: string } }) 
         setUploadProgress(progress);
       },
       (error) => {
+        // --- Enhanced Error Handling ---
         console.error("File upload error:", error);
-        toast({ title: 'Upload Failed', description: error.message || 'Could not upload the file. Check storage rules and network.', variant: 'destructive' });
+        console.error("Firebase Storage Error Code:", error.code);
+        console.error("Firebase Storage Error Message:", error.message);
+        
+        toast({ 
+          title: 'Upload Failed', 
+          description: `Error: ${error.message} (${error.code})`, 
+          variant: 'destructive',
+          duration: 9000,
+        });
+
         setIsUploading(false);
         setUploadProgress(0);
       },
       async () => {
-        const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-        const newAttachment: Attachment = {
-          name: file.name,
-          url: downloadURL,
-          type: file.type,
-          path: filePath,
-        };
-        
-        const latestDraft = getDraft(currentDraftId) || draft;
-        const updatedAttachments = [...(latestDraft.attachments || []), newAttachment];
+        // --- Enhanced Finalization Logic with Error Handling ---
+        try {
+            const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+            const newAttachment: Attachment = {
+                name: file.name,
+                url: downloadURL,
+                type: file.type,
+                path: filePath,
+            };
+            
+            const updatedAttachments = [...(draft.attachments || []), newAttachment];
+            // Update local state immediately for better UX
+            setDraft(d => d ? { ...d, attachments: updatedAttachments } : null);
+            
+            // Save the new attachment array to Firestore
+            await saveDraft({ id: currentDraftId, attachments: updatedAttachments });
 
-        setDraft(d => d ? { ...d, attachments: updatedAttachments } : null);
-        
-        await saveDraft({ id: currentDraftId, attachments: updatedAttachments });
-
-        toast({ title: 'File Uploaded', description: `${file.name} has been attached.` });
-
-        setIsUploading(false);
-        if(fileInputRef.current) fileInputRef.current.value = '';
+            toast({ title: 'File Uploaded', description: `${file.name} has been attached.` });
+        } catch (error: any) {
+             console.error("Error finalizing upload:", error);
+             toast({ 
+                title: 'Upload Failed', 
+                description: `Could not get download URL or save to draft: ${error.message}`, 
+                variant: 'destructive',
+                duration: 9000,
+            });
+        } finally {
+            setIsUploading(false);
+            if(fileInputRef.current) fileInputRef.current.value = '';
+        }
       }
     );
   };
@@ -200,13 +254,9 @@ export default function DraftEditorPage({ params }: { params: { id: string } }) 
     if (!draft?.id) return;
 
     try {
-        // Create a reference to the file to delete
         const fileRef = storageRef(storage, attachmentToRemove.path);
-
-        // Delete the file
         await deleteObject(fileRef);
 
-        // Then, remove the attachment from the draft's data in Firestore
         const updatedAttachments = draft.attachments?.filter(att => att.url !== attachmentToRemove.url) || [];
         setDraft(d => d ? { ...d, attachments: updatedAttachments } : null);
         await saveDraft({ id: draft.id, attachments: updatedAttachments });
@@ -369,3 +419,5 @@ export default function DraftEditorPage({ params }: { params: { id: string } }) 
     </div>
   );
 }
+
+    
