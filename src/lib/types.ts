@@ -1,6 +1,10 @@
 import type { ExtractStrategicBlueprintOutput } from "@/ai/types";
 
-export type StrategicBlueprint = ExtractStrategicBlueprintOutput;
+export interface StrategicBlueprint extends ExtractStrategicBlueprintOutput {
+    id: string;
+    createdAt?: any; // Allow serverTimestamp
+    updatedAt?: any; // Allow serverTimestamp
+};
 
 export type DraftStatus = 'Draft' | 'In Review' | 'Approved' | 'Rejected';
 

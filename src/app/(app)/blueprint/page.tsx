@@ -13,9 +13,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import type { StrategicBlueprint } from '@/lib/types';
 import { Badge } from '@/components/ui/badge';
+import { serverTimestamp } from 'firebase/firestore';
 
 export default function BlueprintPage() {
-  const { blueprint, setBlueprint } = useApp();
+  const { blueprint, setBlueprint, saveBlueprint } = useApp();
   const [documentContent, setDocumentContent] = useState('');
   const [url, setUrl] = useState('');
   const [file, setFile] = useState<File | null>(null);
@@ -95,7 +96,17 @@ export default function BlueprintPage() {
         return;
     }
     const extractedBlueprint = await extractStrategicBlueprint({ documentContent: content });
-    setBlueprint(extractedBlueprint);
+    
+    // Save the new blueprint to Firestore and update the local state.
+    const blueprintToSave: StrategicBlueprint = {
+      ...extractedBlueprint,
+      id: blueprint?.id || '', // Reuse existing ID or let saveBlueprint handle it
+      createdAt: blueprint?.createdAt || serverTimestamp(),
+    };
+
+    saveBlueprint(blueprintToSave);
+    setBlueprint(blueprintToSave); // Also update local state immediately
+    
     toast({
       title: 'Success',
       description: 'Strategic blueprint extracted and updated.',

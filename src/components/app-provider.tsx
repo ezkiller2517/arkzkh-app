@@ -3,16 +3,18 @@
 import { createContext, useContext, useState, ReactNode, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useFirebase, useUser, useDoc, useCollection, useMemoFirebase } from '@/firebase';
-import { doc, collection, setDoc, addDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, collection, setDoc, addDoc, serverTimestamp, query, limit, getDocs } from 'firebase/firestore';
 import type { UserData, StrategicBlueprint, Draft, DraftStatus } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { setDocumentNonBlocking, addDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase/non-blocking-updates';
+import { v4 as uuidv4 } from 'uuid';
 
 interface AppContextType {
   userData: UserData | null;
   setUserData: (user: UserData) => void;
   blueprint: StrategicBlueprint | null;
   setBlueprint: (blueprint: StrategicBlueprint | null) => void;
+  saveBlueprint: (blueprint: StrategicBlueprint) => void;
   drafts: Draft[];
   getDraft: (id: string) => Draft | undefined;
   saveDraft: (draft: Partial<Draft> & { id: string }) => void;
@@ -46,12 +48,40 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [user, isUserLoading, userData, isUserDataLoading, router]);
 
+  // Fetch blueprint
+  useEffect(() => {
+    const fetchBlueprint = async () => {
+        if (firestore && userData?.organizationId) {
+            const blueprintColRef = collection(firestore, 'organizations', userData.organizationId, 'strategicBlueprints');
+            // Assuming there's only one blueprint, we fetch the first one.
+            const q = query(blueprintColRef, limit(1));
+            const snapshot = await getDocs(q);
+            if (!snapshot.empty) {
+                const blueprintDoc = snapshot.docs[0];
+                setBlueprint({ id: blueprintDoc.id, ...blueprintDoc.data() } as StrategicBlueprint);
+            }
+        }
+    };
+    fetchBlueprint();
+  }, [firestore, userData?.organizationId]);
+
 
   const setUserData = useCallback((newUserData: UserData) => {
     if (userDocRef) {
       setDocumentNonBlocking(userDocRef, newUserData, { merge: true });
     }
   }, [userDocRef]);
+
+  const saveBlueprint = useCallback((blueprintToSave: StrategicBlueprint) => {
+    if (!firestore || !userData?.organizationId) return;
+    
+    const blueprintId = blueprintToSave.id || blueprint?.id || uuidv4();
+    const blueprintRef = doc(firestore, 'organizations', userData.organizationId, 'strategicBlueprints', blueprintId);
+
+    const dataToSet = { ...blueprintToSave, id: blueprintId, updatedAt: serverTimestamp() };
+
+    setDocumentNonBlocking(blueprintRef, dataToSet, { merge: true });
+  }, [firestore, userData?.organizationId, blueprint?.id]);
 
 
   const getDraft = useCallback((id: string) => drafts?.find(d => d.id === id), [drafts]);
@@ -88,6 +118,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setUserData,
     blueprint,
     setBlueprint,
+    saveBlueprint,
     drafts: drafts || [],
     getDraft,
     saveDraft,
