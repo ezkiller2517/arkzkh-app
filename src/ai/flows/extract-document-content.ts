@@ -29,34 +29,29 @@ const extractDocumentContentFlow = ai.defineFlow(
   },
   async (input) => {
     let content: string;
-    if ('data' in input.document) {
-      // It's a file, pass the data URI directly.
-      const result = await ai.generate({
-        prompt: [
-          {text: 'Extract the text from this document.'},
-          {media: {url: input.document.data}},
-        ],
-      });
-      content = result.text || '';
-    } else {
-      // It's a URL, fetch the content first.
-      try {
-        const response = await fetch(input.document.url);
-        if (!response.ok) {
-          throw new Error(`Failed to fetch URL: ${response.statusText}`);
-        }
-        const htmlContent = await response.text();
-        // Now ask the AI to extract text from the HTML content.
+    try {
+      if ('data' in input.document) {
+        // It's a file, pass the data URI directly.
         const result = await ai.generate({
-          prompt: `Extract the main text content from the following HTML: \n\n${htmlContent}`,
+          prompt: [
+            {text: 'Extract the text from this document.'},
+            {media: {url: input.document.data}},
+          ],
         });
         content = result.text || '';
-      } catch (error: any) {
-        if (error instanceof TypeError && error.message.includes('fetch failed')) {
-            throw new Error(`Failed to fetch the URL: ${input.document.url}. Please ensure it is correct and publicly accessible.`);
-        }
-        throw error;
+      } else {
+        // It's a URL. Let the model fetch and extract the content.
+        const result = await ai.generate({
+          prompt: `Extract the main text content from the website at the following URL: ${input.document.url}`,
+        });
+        content = result.text || '';
       }
+    } catch (error: any) {
+        console.error('Error in extractDocumentContentFlow:', error);
+        if (error.message.includes('fetch')) {
+             throw new Error(`Failed to fetch the URL: ${'url' in input.document ? input.document.url : 'N/A'}. Please ensure it is correct and publicly accessible.`);
+        }
+        throw new Error('An unexpected error occurred while extracting the document content.');
     }
 
     return { content };

@@ -6,23 +6,23 @@ import { Calendar } from '@/components/ui/calendar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { useApp } from '@/components/app-provider';
-import { initialDrafts } from '@/lib/data';
-
-// Mock events based on approved drafts
-const mockEvents = initialDrafts
-    .filter(d => d.status === 'Approved')
-    .map((d, i) => ({
-        id: `evt-${i}`,
-        title: d.title,
-        date: new Date(new Date(d.updatedAt).setDate(new Date(d.updatedAt).getDate() + (i * 3 + 2))),
-        type: i % 2 === 0 ? 'External' : 'Internal',
-        draftId: d.id,
-    }));
 
 export default function CalendarPage() {
   const [date, setDate] = useState<Date | undefined>(new Date());
-  
-  const selectedDateEvents = date ? mockEvents.filter(event => 
+  const { drafts } = useApp();
+
+  // Create events based on approved drafts from Firestore
+  const events = drafts
+    .filter(d => d.status === 'Approved' && d.updatedAt?.toDate)
+    .map((d, i) => ({
+        id: `evt-${i}`,
+        title: d.title,
+        date: new Date(new Date(d.updatedAt.toDate()).setDate(new Date(d.updatedAt.toDate()).getDate() + (i * 3 + 2))),
+        type: (i % 2 === 0) ? 'External' : 'Internal',
+        draftId: d.id,
+    }));
+
+  const selectedDateEvents = date ? events.filter(event => 
     event.date.toDateString() === date.toDateString()
   ) : [];
 
@@ -41,17 +41,17 @@ export default function CalendarPage() {
           <TabsTrigger value="internal">Internal</TabsTrigger>
         </TabsList>
         <TabsContent value="external">
-          <CalendarView type="External" date={date} setDate={setDate} selectedDateEvents={selectedDateEvents.filter(e => e.type === 'External')} />
+          <CalendarView type="External" date={date} setDate={setDate} events={events} selectedDateEvents={selectedDateEvents.filter(e => e.type === 'External')} />
         </TabsContent>
         <TabsContent value="internal">
-          <CalendarView type="Internal" date={date} setDate={setDate} selectedDateEvents={selectedDateEvents.filter(e => e.type === 'Internal')} />
+          <CalendarView type="Internal" date={date} setDate={setDate} events={events} selectedDateEvents={selectedDateEvents.filter(e => e.type === 'Internal')} />
         </TabsContent>
       </Tabs>
     </div>
   );
 }
 
-function CalendarView({type, date, setDate, selectedDateEvents}: {type: 'Internal' | 'External', date: Date | undefined, setDate: (d: Date | undefined) => void, selectedDateEvents: typeof mockEvents }) {
+function CalendarView({type, date, setDate, events, selectedDateEvents}: {type: 'Internal' | 'External', date: Date | undefined, setDate: (d: Date | undefined) => void, events: any[], selectedDateEvents: any[] }) {
     return (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <Card className="lg:col-span-2">
@@ -69,13 +69,12 @@ function CalendarView({type, date, setDate, selectedDateEvents}: {type: 'Interna
                         row: "flex w-full mt-2 justify-around",
                     }}
                     components={{
-                        Day: ({ date, displayMonth }) => {
-                          const dayEvents = mockEvents.filter(
+                        Day: ({ date }) => {
+                          const dayEvents = events.filter(
                             (event) =>
                               event.type === type &&
                               event.date.toDateString() === date.toDateString()
                           );
-                          const isSelected = date.toDateString() === (new Date()).toDateString();
                           return (
                             <div className="relative flex items-center justify-center h-9 w-9">
                               <time dateTime={date.toISOString()}>{date.getDate()}</time>
