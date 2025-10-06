@@ -21,6 +21,7 @@ export default function DraftEditorPage({ params }: { params: { id: string } }) 
   const router = useRouter();
   const { getDraft, saveDraft, userData, submitDraft, approveDraft, rejectDraft, blueprint } = useApp();
   const { toast } = useToast();
+  const { id } = params;
 
   const [draft, setDraft] = useState<Partial<Draft> | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -28,10 +29,10 @@ export default function DraftEditorPage({ params }: { params: { id: string } }) 
   const [aiResult, setAiResult] = useState<ScoreContentAlignmentOutput | null>(null);
 
   useEffect(() => {
-    if (params.id === 'new') {
+    if (id === 'new') {
       setDraft({ id: uuidv4(), title: '', content: '', status: 'Draft' });
     } else {
-      const existingDraft = getDraft(params.id);
+      const existingDraft = getDraft(id);
       if (existingDraft) {
         setDraft(existingDraft);
         if(existingDraft.alignmentScore) {
@@ -48,7 +49,7 @@ export default function DraftEditorPage({ params }: { params: { id: string } }) 
         // router.push('/drafts');
       }
     }
-  }, [params.id, getDraft, router, toast]);
+  }, [id, getDraft, router, toast]);
 
   const handleSave = async () => {
     if (!draft?.id || !draft.title) {
@@ -66,7 +67,7 @@ export default function DraftEditorPage({ params }: { params: { id: string } }) 
     }
     saveDraft(draftData);
     setIsSaving(false);
-    if (params.id === 'new') {
+    if (id === 'new') {
         router.replace(`/drafts/${draft.id}`);
     }
   };
