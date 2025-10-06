@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/select";
 import { contentTemplates } from '@/lib/templates';
 import { useFirebase } from '@/firebase';
-import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
+import { ref as storageRef, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 
 export default function DraftEditorPage({ params }: { params: { id: string } }) {
   const router = useRouter();
@@ -38,6 +38,7 @@ export default function DraftEditorPage({ params }: { params: { id: string } }) 
   const [isSaving, setIsSaving] = useState(false);
   const [isScoring, setIsScoring] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [aiResult, setAiResult] = useState<ScoreContentAlignmentOutput | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -146,36 +147,42 @@ export default function DraftEditorPage({ params }: { params: { id: string } }) 
 
     const file = event.target.files[0];
     setIsUploading(true);
+    setUploadProgress(0);
 
-    try {
-      const filePath = `organizations/${userData.organizationId}/drafts/${draft.id}/${file.name}`;
-      const fileStorageRef = storageRef(storage, filePath);
-      
-      const snapshot = await uploadBytes(fileStorageRef, file);
-      const downloadURL = await getDownloadURL(snapshot.ref);
+    const filePath = `organizations/${userData.organizationId}/drafts/${draft.id}/${file.name}`;
+    const fileStorageRef = storageRef(storage, filePath);
+    const uploadTask = uploadBytesResumable(fileStorageRef, file);
 
-      const newAttachment: Attachment = {
-        name: file.name,
-        url: downloadURL,
-        type: file.type,
-      };
-      
-      const updatedAttachments = [...(draft.attachments || []), newAttachment];
-      setDraft(d => d ? { ...d, attachments: updatedAttachments } : null);
-      
-      // Auto-save the draft with the new attachment
-      saveDraft({ id: draft.id, attachments: updatedAttachments });
+    uploadTask.on('state_changed',
+      (snapshot) => {
+        const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+        setUploadProgress(progress);
+      },
+      (error) => {
+        console.error("File upload error:", error);
+        toast({ title: 'Upload Failed', description: 'Could not upload the file.', variant: 'destructive' });
+        setIsUploading(false);
+        setUploadProgress(0);
+      },
+      async () => {
+        const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+        const newAttachment: Attachment = {
+          name: file.name,
+          url: downloadURL,
+          type: file.type,
+        };
+        
+        const updatedAttachments = [...(draft.attachments || []), newAttachment];
+        setDraft(d => d ? { ...d, attachments: updatedAttachments } : null);
+        
+        saveDraft({ id: draft.id!, attachments: updatedAttachments });
 
-      toast({ title: 'File Uploaded', description: `${file.name} has been attached.` });
+        toast({ title: 'File Uploaded', description: `${file.name} has been attached.` });
 
-    } catch (error) {
-      console.error("File upload error:", error);
-      toast({ title: 'Upload Failed', description: 'Could not upload the file.', variant: 'destructive' });
-    } finally {
-      setIsUploading(false);
-      // Reset file input
-      if(fileInputRef.current) fileInputRef.current.value = '';
-    }
+        setIsUploading(false);
+        if(fileInputRef.current) fileInputRef.current.value = '';
+      }
+    );
   };
 
   const handleRemoveAttachment = (url: string) => {
@@ -247,6 +254,12 @@ export default function DraftEditorPage({ params }: { params: { id: string } }) 
                     Upload Media
                 </Button>
             </div>
+            {isUploading && (
+                <div className="space-y-2">
+                    <Progress value={uploadProgress} className="w-full" />
+                    <p className="text-sm text-muted-foreground text-center">{`Uploading... ${Math.round(uploadProgress)}%`}</p>
+                </div>
+            )}
             {draft.attachments && draft.attachments.length > 0 ? (
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                     {draft.attachments.map((file, index) => (
