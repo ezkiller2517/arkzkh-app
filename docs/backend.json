@@ -1,0 +1,509 @@
+{
+  "entities": {
+    "User": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "User",
+      "type": "object",
+      "description": "Represents a user in the AlignmentOS system.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the User entity."
+        },
+        "email": {
+          "type": "string",
+          "description": "User's email address.",
+          "format": "email"
+        },
+        "displayName": {
+          "type": "string",
+          "description": "User's display name."
+        },
+        "role": {
+          "type": "string",
+          "description": "The role of the user (e.g., Contributor, Approver, Admin)."
+        },
+        "organizationId": {
+          "type": "string",
+          "description": "Reference to Organization. (Relationship: Organization 1:N User)"
+        }
+      },
+      "required": [
+        "id",
+        "email",
+        "displayName",
+        "role",
+        "organizationId"
+      ]
+    },
+    "Organization": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Organization",
+      "type": "object",
+      "description": "Represents an organization using AlignmentOS.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Organization entity."
+        },
+        "name": {
+          "type": "string",
+          "description": "Name of the organization."
+        }
+      },
+      "required": [
+        "id",
+        "name"
+      ]
+    },
+    "StrategicBlueprint": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "StrategicBlueprint",
+      "type": "object",
+      "description": "Represents the strategic blueprint of an organization, extracted from various documents.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Strategic Blueprint entity."
+        },
+        "organizationId": {
+          "type": "string",
+          "description": "Reference to Organization. (Relationship: Organization 1:N StrategicBlueprint)"
+        },
+        "vision": {
+          "type": "string",
+          "description": "The organization's vision statement."
+        },
+        "mission": {
+          "type": "string",
+          "description": "The organization's mission statement."
+        },
+        "values": {
+          "type": "string",
+          "description": "The organization's core values."
+        },
+        "objectives": {
+          "type": "string",
+          "description": "The organization's strategic objectives."
+        },
+        "pillars": {
+          "type": "string",
+          "description": "The organization's strategic pillars."
+        },
+        "taxonomyTerms": {
+          "type": "string",
+          "description": "The organization's taxonomy terms."
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    },
+    "ContentObject": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "ContentObject",
+      "type": "object",
+      "description": "Represents a piece of content to be scored for alignment.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Content Object entity."
+        },
+        "strategicBlueprintId": {
+          "type": "string",
+          "description": "Reference to StrategicBlueprint. (Relationship: StrategicBlueprint 1:N ContentObject)"
+        },
+        "title": {
+          "type": "string",
+          "description": "Title of the content object."
+        },
+        "content": {
+          "type": "string",
+          "description": "The actual content of the object."
+        },
+        "contentType": {
+          "type": "string",
+          "description": "The type of the content, e.g., document, link, text."
+        },
+        "ownerId": {
+          "type": "string",
+          "description": "Reference to User. (Relationship: User 1:N ContentObject)"
+        }
+      },
+      "required": [
+        "id",
+        "strategicBlueprintId",
+        "title",
+        "content",
+        "contentType",
+        "ownerId"
+      ]
+    },
+    "AlignmentScore": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "AlignmentScore",
+      "type": "object",
+      "description": "Represents the alignment score of a content object against a strategic blueprint.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Alignment Score entity."
+        },
+        "contentObjectId": {
+          "type": "string",
+          "description": "Reference to ContentObject. (Relationship: ContentObject 1:N AlignmentScore)"
+        },
+        "score": {
+          "type": "number",
+          "description": "The alignment score (0..1)."
+        },
+        "feedback": {
+          "type": "string",
+          "description": "Feedback on what to fix to improve alignment."
+        },
+        "suggestedActions": {
+          "type": "string",
+          "description": "Suggested actions to improve alignment."
+        },
+        "rationale": {
+          "type": "string",
+          "description": "Rationale for the alignment score."
+        }
+      },
+      "required": [
+        "id",
+        "contentObjectId",
+        "score",
+        "feedback",
+        "suggestedActions",
+        "rationale"
+      ]
+    },
+    "ApprovalWorkflow": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "ApprovalWorkflow",
+      "type": "object",
+      "description": "Represents the approval workflow for a content object.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Approval Workflow entity."
+        },
+        "contentObjectId": {
+          "type": "string",
+          "description": "Reference to ContentObject. (Relationship: ContentObject 1:N ApprovalWorkflow)"
+        },
+        "status": {
+          "type": "string",
+          "description": "The current status of the workflow (e.g., Draft, Submitted, Approved, Rejected)."
+        },
+        "approverId": {
+          "type": "string",
+          "description": "Reference to User who is the approver. (Relationship: User 1:N ApprovalWorkflow)"
+        },
+        "submissionDate": {
+          "type": "string",
+          "description": "The date the content object was submitted for approval.",
+          "format": "date-time"
+        },
+        "approvalDate": {
+          "type": "string",
+          "description": "The date the content object was approved.",
+          "format": "date-time"
+        },
+        "rejectionDate": {
+          "type": "string",
+          "description": "The date the content object was rejected.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "contentObjectId",
+        "status"
+      ]
+    },
+    "CalendarEvent": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "CalendarEvent",
+      "type": "object",
+      "description": "Represents an event in either the internal or external communications calendar.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Calendar Event entity."
+        },
+        "contentObjectId": {
+          "type": "string",
+          "description": "Reference to ContentObject. (Relationship: ContentObject 1:N CalendarEvent)"
+        },
+        "calendarType": {
+          "type": "string",
+          "description": "The type of calendar (e.g., Internal, External)."
+        },
+        "startTime": {
+          "type": "string",
+          "description": "The start time of the event.",
+          "format": "date-time"
+        },
+        "endTime": {
+          "type": "string",
+          "description": "The end time of the event.",
+          "format": "date-time"
+        },
+        "title": {
+          "type": "string",
+          "description": "The title of the event."
+        },
+        "description": {
+          "type": "string",
+          "description": "The description of the event."
+        }
+      },
+      "required": [
+        "id",
+        "contentObjectId",
+        "calendarType",
+        "startTime",
+        "endTime",
+        "title",
+        "description"
+      ]
+    },
+    "AuditLog": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "AuditLog",
+      "type": "object",
+      "description": "Represents an audit log entry for tracking changes and decisions.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Audit Log entity."
+        },
+        "userId": {
+          "type": "string",
+          "description": "Reference to User who performed the action. (Relationship: User 1:N AuditLog)"
+        },
+        "timestamp": {
+          "type": "string",
+          "description": "The timestamp of the action.",
+          "format": "date-time"
+        },
+        "action": {
+          "type": "string",
+          "description": "The action performed (e.g., Content Created, Submitted for Approval, Approved, Rejected)."
+        },
+        "contentObjectId": {
+          "type": "string",
+          "description": "Reference to ContentObject affected by the action. (Relationship: ContentObject 1:N AuditLog)"
+        },
+        "details": {
+          "type": "string",
+          "description": "Additional details about the action."
+        }
+      },
+      "required": [
+        "id",
+        "userId",
+        "timestamp",
+        "action"
+      ]
+    }
+  },
+  "auth": {
+    "providers": [
+      "password",
+      "anonymous"
+    ]
+  },
+  "firestore": {
+    "structure": [
+      {
+        "path": "/organizations/{organizationId}",
+        "definition": {
+          "entityName": "Organization",
+          "schema": {
+            "$ref": "#/backend/entities/Organization"
+          },
+          "description": "Stores organization profiles.",
+          "params": [
+            {
+              "name": "organizationId",
+              "description": "Unique identifier for the organization."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/users/{userId}",
+        "definition": {
+          "entityName": "User",
+          "schema": {
+            "$ref": "#/backend/entities/User"
+          },
+          "description": "Stores user profiles. The `organizationId` is stored here.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "Unique identifier for the user."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/organizations/{organizationId}/strategicBlueprints/{strategicBlueprintId}",
+        "definition": {
+          "entityName": "StrategicBlueprint",
+          "schema": {
+            "$ref": "#/backend/entities/StrategicBlueprint"
+          },
+          "description": "Stores strategic blueprints for each organization.",
+          "params": [
+            {
+              "name": "organizationId",
+              "description": "Unique identifier for the organization."
+            },
+            {
+              "name": "strategicBlueprintId",
+              "description": "Unique identifier for the strategic blueprint."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/organizations/{organizationId}/contentObjects/{contentObjectId}",
+        "definition": {
+          "entityName": "ContentObject",
+          "schema": {
+            "$ref": "#/backend/entities/ContentObject"
+          },
+          "description": "Stores content objects, associated with a strategic blueprint.",
+          "params": [
+            {
+              "name": "organizationId",
+              "description": "Unique identifier for the organization."
+            },
+            {
+              "name": "contentObjectId",
+              "description": "Unique identifier for the content object."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/organizations/{organizationId}/contentObjects/{contentObjectId}/alignmentScores/{alignmentScoreId}",
+        "definition": {
+          "entityName": "AlignmentScore",
+          "schema": {
+            "$ref": "#/backend/entities/AlignmentScore"
+          },
+          "description": "Stores alignment scores for content objects.",
+          "params": [
+            {
+              "name": "organizationId",
+              "description": "Unique identifier for the organization."
+            },
+            {
+              "name": "contentObjectId",
+              "description": "Unique identifier for the content object."
+            },
+            {
+              "name": "alignmentScoreId",
+              "description": "Unique identifier for the alignment score."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/organizations/{organizationId}/contentObjects/{contentObjectId}/approvalWorkflows/{approvalWorkflowId}",
+        "definition": {
+          "entityName": "ApprovalWorkflow",
+          "schema": {
+            "$ref": "#/backend/entities/ApprovalWorkflow"
+          },
+          "description": "Stores approval workflows for content objects.",
+          "params": [
+            {
+              "name": "organizationId",
+              "description": "Unique identifier for the organization."
+            },
+            {
+              "name": "contentObjectId",
+              "description": "Unique identifier for the content object."
+            },
+            {
+              "name": "approvalWorkflowId",
+              "description": "Unique identifier for the approval workflow."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/organizations/{organizationId}/contentObjects/{contentObjectId}/calendarEvents/{calendarEventId}",
+        "definition": {
+          "entityName": "CalendarEvent",
+          "schema": {
+            "$ref": "#/backend/entities/CalendarEvent"
+          },
+          "description": "Stores calendar events associated with content objects.",
+          "params": [
+            {
+              "name": "organizationId",
+              "description": "Unique identifier for the organization."
+            },
+            {
+              "name": "contentObjectId",
+              "description": "Unique identifier for the content object."
+            },
+            {
+              "name": "calendarEventId",
+              "description": "Unique identifier for the calendar event."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/organizations/{organizationId}/auditLogs/{auditLogId}",
+        "definition": {
+          "entityName": "AuditLog",
+          "schema": {
+            "$ref": "#/backend/entities/AuditLog"
+          },
+          "description": "Stores audit logs.",
+          "params": [
+            {
+              "name": "organizationId",
+              "description": "Unique identifier for the organization."
+            },
+            {
+              "name": "auditLogId",
+              "description": "Unique identifier for the audit log."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/users/{userId}/drafts/{draftId}",
+        "definition": {
+          "entityName": "ContentObject",
+          "schema": {
+            "$ref": "#/backend/entities/ContentObject"
+          },
+          "description": "Stores draft content objects for each user. The `ownerId` is implicitly the {userId}.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "Unique identifier for the user."
+            },
+            {
+              "name": "draftId",
+              "description": "Unique identifier for the draft content object."
+            }
+          ]
+        }
+      }
+    ],
+    "reasoning": "The Firestore structure is designed to support AlignmentOS's core features, focusing on secure access control, efficient data retrieval, and scalability. It leverages path-based ownership for private user data and denormalization to maintain authorization independence. The structure enables robust security rules without relying on complex `get()` operations. \n\nOrganization is the root.  All Strategic Blueprints, Content Objects, Alignment Scores, Approval Workflows, Calendar Events, and Audit Logs live under the organization. Users are in a flat `users` collection (avoids needing to lookup Organization to find a user).\n\nAuthorization Independence:  The `organizationId` is present on almost every entity.  This denormalization strategy ensures that access control rules can be applied at any level in the hierarchy without needing to traverse up the tree to check the organization. The ownerId is denormalized into the ContentObject which avoids a get() lookup to verify user ownership of a content object.  \n\nQAPs Support: \n* Segregation:  `drafts` subcollection under `/users/{userId}` ensures that only the user has access to their drafts.  \n* Membership Map: N/A\n* Path-Based ownership: `/users/{userId}/drafts/{draftId}` ensures that list operations are secure, as only the user can access their drafts."
+  }
+}
