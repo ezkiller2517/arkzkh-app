@@ -85,32 +85,36 @@ export default function DraftEditorPage({ params: { id } }: { params: { id: stri
     }
   };
 
-  const handleSave = async () => {
+  const handleSave = async (redirect: boolean = false) => {
     if (!draft?.id || !draft.title) {
-        toast({ title: 'Title is required', variant: 'destructive' });
-        return;
+        // If title is empty, create a temporary one for saving
+        const draftTitle = draft?.title || `New Draft ${new Date().toLocaleTimeString()}`;
+        setDraft(d => d ? { ...d, title: draftTitle } : null);
     };
     setIsSaving(true);
     const draftData: Partial<Draft> & {id: string} = {
-        id: draft.id,
-        title: draft.title,
-        content: draft.content,
+        id: draft!.id!,
+        title: draft!.title || `New Draft ${new Date().toLocaleTimeString()}`,
+        content: draft!.content,
         author: userData?.displayName || 'Unknown Author',
-        status: draft.status || 'Draft',
-        createdAt: draft.createdAt || serverTimestamp(),
-        attachments: draft.attachments || [],
+        status: draft!.status || 'Draft',
+        createdAt: draft!.createdAt || serverTimestamp(),
+        attachments: draft!.attachments || [],
     }
     try {
         await saveDraft(draftData);
-        toast({ title: 'Draft Saved', description: `Draft "${draft.title}" has been saved.` });
-        if (id === 'new') {
-            router.replace(`/drafts/${draft.id}`);
+        toast({ title: 'Draft Saved', description: `Draft "${draftData.title}" has been saved.` });
+        if (redirect) {
+            router.replace(`/drafts/${draftData.id}`);
+            return true; // Indicate success for chaining
         }
     } catch (error) {
         // Error is already toasted in saveDraft
+        return false; // Indicate failure
     } finally {
         setIsSaving(false);
     }
+    return true;
   };
 
   const handleScoreAlignment = async () => {
@@ -151,13 +155,22 @@ export default function DraftEditorPage({ params: { id } }: { params: { id: stri
     }
   }
 
-  const handleUploadClick = () => {
+  const handleUploadClick = async () => {
     if (id === 'new') {
-        toast({
-            title: 'Please Save Draft',
-            description: 'You must save the draft before you can upload attachments.',
-            variant: 'destructive',
-        });
+        const success = await handleSave(true);
+        if (success) {
+           // The page will redirect, and the effect will pick up the new ID.
+           // We'll trigger the click after a short delay to allow the redirect to process.
+           setTimeout(() => {
+               fileInputRef.current?.click();
+           }, 500);
+        } else {
+            toast({
+                title: 'Could Not Start Upload',
+                description: 'Failed to save the initial draft before uploading.',
+                variant: 'destructive',
+            });
+        }
         return;
     }
     fileInputRef.current?.click();
@@ -286,7 +299,7 @@ export default function DraftEditorPage({ params: { id } }: { params: { id: stri
                         <Button onClick={() => draft.id && approveDraft(draft.id)}>Approve</Button>
                     </>
                 )}
-                <Button onClick={handleSave} disabled={isSaving}>
+                <Button onClick={() => handleSave()} disabled={isSaving}>
                   {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Save Draft
                 </Button>
