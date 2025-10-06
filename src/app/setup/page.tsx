@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useFirebase } from '@/firebase';
-import { doc, setDoc, writeBatch, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, writeBatch, serverTimestamp, collection } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -11,7 +11,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import type { UserRole, UserData, StrategicBlueprint } from '@/lib/types';
-import { Loader2, File, Link as LinkIcon, Pilcrow, Trash2, PlusCircle } from 'lucide-react';
+import { Loader2, File as FileIcon, Link as LinkIcon, Pilcrow, Trash2 } from 'lucide-react';
 import { Icons } from '@/components/icons';
 import { Progress } from '@/components/ui/progress';
 import { extractDocumentContent } from '@/ai/flows/extract-document-content';
@@ -80,7 +80,7 @@ export default function SetupPage() {
         } else if (typeof source.content === 'string' && source.type === 'url') {
            const result = await extractDocumentContent({ document: { url: source.content } });
            combinedContent += `\n\n--- Document: ${source.name} ---\n${result.content}`;
-        } else if (source.content instanceof File) {
+        } else if (source.type === 'file' && typeof source.content === 'object') {
             const dataUri = await new Promise<string>((resolve, reject) => {
                 const reader = new FileReader();
                 reader.readAsDataURL(source.content as File);
@@ -168,7 +168,7 @@ export default function SetupPage() {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-muted/40 p-4">
        <div className="w-full max-w-2xl">
-            <div className="mb-8 text-center">
+            <div className="mb-8">
                 <Icons.Logo />
             </div>
 
@@ -202,7 +202,7 @@ export default function SetupPage() {
                             <div className="flex items-center gap-2">
                                 <span className="text-sm font-medium">Add a source:</span>
                                 <Button variant="outline" size="sm" onClick={() => handleAddSource('text')}><Pilcrow className="mr-2 h-4 w-4" />Text</Button>
-                                <Button variant="outline" size="sm" onClick={() => handleAddSource('file')}><File className="mr-2 h-4 w-4" />File</Button>
+                                <Button variant="outline" size="sm" onClick={() => handleAddSource('file')}><FileIcon className="mr-2 h-4 w-4" />File</Button>
                                 <Button variant="outline" size="sm" onClick={() => handleAddSource('url')}><LinkIcon className="mr-2 h-4 w-4" />URL</Button>
                             </div>
                            
@@ -275,7 +275,7 @@ export default function SetupPage() {
 function SourceInput({ source, onUpdate, onRemove }: { source: DocumentSource, onUpdate: (id: string, value: string | File, name?: string) => void, onRemove: (id: string) => void }) {
     const iconMap = {
         text: <Pilcrow className="h-4 w-4" />,
-        file: <File className="h-4 w-4" />,
+        file: <FileIcon className="h-4 w-4" />,
         url: <LinkIcon className="h-4 w-4" />,
     }
     return (
