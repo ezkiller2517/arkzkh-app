@@ -1,197 +1,216 @@
 /**
  * @file Firestore Security Rules for AlignmentOS
+ * @version Prototyping
  *
- * @core_philosophy This ruleset enforces a strict ownership model for user data and an organization-centric model for shared resources.
- * All user-specific data is nested under `/users/{userId}` and organization data is under `/organizations/{organizationId}`.
- * This provides clear ownership boundaries and simplifies security rules.
+ * @description This ruleset enforces a strict ownership model for user data and organizations.
+ * All data is nested under either /users/{userId} or /organizations/{organizationId}, providing clear ownership boundaries.
+ * It is in prototyping mode to allow for rapid iteration on the data shape.
  *
- * @data_structure
- * - `/organizations/{organizationId}`: Stores organization profiles.
- * - `/users/{userId}`: Stores user profiles.
- * - `/organizations/{organizationId}/strategicBlueprints/{strategicBlueprintId}`: Stores strategic blueprints for each organization.
- * - `/organizations/{organizationId}/contentObjects/{contentObjectId}`: Stores content objects associated with a strategic blueprint.
- * - `/organizations/{organizationId}/contentObjects/{contentObjectId}/alignmentScores/{alignmentScoreId}`: Stores alignment scores for content objects.
- * - `/organizations/{organizationId}/contentObjects/{contentObjectId}/approvalWorkflows/{approvalWorkflowId}`: Stores approval workflows for content objects.
- * - `/organizations/{organizationId}/contentObjects/{contentObjectId}/calendarEvents/{calendarEventId}`: Stores calendar events associated with content objects.
- * - `/organizations/{organizationId}/auditLogs/{auditLogId}`: Stores audit logs.
- * - `/users/{userId}/drafts/{draftId}`: Stores draft content objects for each user.
+ * Data Structure:
+ * - /organizations/{organizationId}: Root collection for organization data.
+ * - /users/{userId}: Root collection for user data.
+ * - /organizations/{organizationId}/strategicBlueprints/{strategicBlueprintId}: Strategic blueprints for each organization.
+ * - /organizations/{organizationId}/contentObjects/{contentObjectId}: Content objects associated with a strategic blueprint.
+ * - /organizations/{organizationId}/contentObjects/{contentObjectId}/alignmentScores/{alignmentScoreId}: Alignment scores for content objects.
+ * - /organizations/{organizationId}/contentObjects/{contentObjectId}/approvalWorkflows/{approvalWorkflowId}: Approval workflows for content objects.
+ * - /organizations/{organizationId}/contentObjects/{contentObjectId}/calendarEvents/{calendarEventId}: Calendar events associated with content objects.
+ * - /organizations/{organizationId}/auditLogs/{auditLogId}: Audit logs for each organization.
+ * - /users/{userId}/drafts/{draftId}: Draft content objects for each user.
  *
- * @key_security_decisions
- * - User listing is disallowed.
- * - Strict owner-only access is enforced for user-specific data.
- * - Organization-level data requires the user to be authenticated.
- * - Data validation is limited to relational integrity and authorization fields to allow for rapid prototyping.
+ * Key Security Decisions:
+ * - Users can only access their own user document.
+ * - Users can only create, update, and delete their own draft content objects.
+ * - Organizations can be created by anyone, but this should be restricted in production.
+ * - Listing of users is disallowed for privacy.
+ * - All other collections require the user to be authenticated.
  *
- * @denormalization_for_authorization
- * - `organizationId` is present on almost every entity to avoid traversing up the tree for authorization checks.
- * - `ownerId` is denormalized into the `ContentObject` to avoid lookups for ownership verification.
+ * Denormalization for Authorization:
+ * - The `organizationId` is present on almost every entity to ensure that access control rules can be applied at any level in the hierarchy without needing to traverse up the tree.
+ * - The `ownerId` is denormalized into the `ContentObject` to avoid `get()` lookups to verify user ownership of a content object.
  *
- * @structural_segregation
- * - Draft content objects are stored in a private subcollection (`/users/{userId}/drafts/{draftId}`) to ensure only the user has access.
+ * Structural Segregation:
+ * - Draft content objects are stored in a private user subcollection (`/users/{userId}/drafts/{draftId}`) to ensure that only the user has access to their drafts.
  */
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
     /**
-     * @description Allows creating, reading, updating, and deleting organization documents. Requires the user to be authenticated.
+     * @description Allows read and write access to organization documents. In a real-world scenario, organization creation should be restricted.
      * @path /organizations/{organizationId}
-     * @allow (create) User with valid auth can create an organization document.
-     * @deny (create) User without auth cannot create an organization document.
-     * @allow (get, list) Any authenticated user can read organization documents.
-     * @deny (update, delete) No one can update or delete organization documents.
-     * @principle Requires user to be signed in to create an organization, but does not restrict updates or deletes to only the org creator.
+     * @allow (create) - Any authenticated user can create an organization. This should be restricted in production.
+     * @allow (get) - Any user can read organization data.
+     * @allow (list) - Any user can list organizations.
+     * @allow (update) - No one can update an organization.
+     * @allow (delete) - No one can delete an organization.
+     * @deny (create) - if false
+     * @principle Allows anyone to read organization details; open create is for prototyping only.
      */
     match /organizations/{organizationId} {
-      allow get, list: if isSignedIn();
-      allow create: if isSignedIn() && request.resource.data.id == organizationId; // Validate that the ID matches the path
+      allow get, list: if true;
+      allow create: if isSignedIn();
       allow update, delete: if false;
     }
 
     /**
-     * @description Allows creating, reading, updating, and deleting user documents. Enforces ownership for writes.
+     * @description Allows users to read and update their own user document.
      * @path /users/{userId}
-     * @allow (create) User can create their own user document if the userId in the path matches their auth UID.
-     * @deny (create) User cannot create a user document for another user.
-     * @allow (get) User can get their own user document.
-     * @deny (get) User cannot get another user's document.
-     * @allow (list) User cannot list all user documents.
-     * @allow (update) User can update their own user document.
-     * @deny (update) User cannot update another user's document.
-     * @allow (delete) User can delete their own user document.
-     * @deny (delete) User cannot delete another user's document.
-     * @principle Enforces document ownership for writes and restricts access to a user's own data tree.
+     * @allow (get) - The user can read their own profile data.
+     * @allow (create) - The user can create their own profile.
+     * @allow (update) - The user can update their own profile.
+     * @allow (delete) - No one can delete a user.
+     * @allow (list) - Listing users is not permitted.
+     * @deny (create) - if request.auth.uid != userId
+     * @deny (update) - if request.auth.uid != userId || resource == null
+     * @principle Enforces user-ownership for profile data.
      */
     match /users/{userId} {
       allow get: if isOwner(userId);
-      allow list: if false; // User listing is disallowed.
-      allow create: if isOwner(userId) && request.resource.data.id == userId; // Self-creation: Validate that the ID matches the path
-      allow update: if isExistingOwner(userId) && resource.data.id == request.resource.data.id; // Validate ownership and enforce immutability of the ID field
-      allow delete: if isExistingOwner(userId);
+      allow create: if isOwner(userId);
+      allow update: if isExistingOwner(userId);
+      allow delete: if false;
+      allow list: if false;
     }
 
     /**
-     * @description Allows creating, reading, updating, and deleting strategic blueprints under an organization.
+     * @description Allows CRUD operations on strategic blueprints within an organization, restricting access to authenticated users.
      * @path /organizations/{organizationId}/strategicBlueprints/{strategicBlueprintId}
-     * @allow (create) Any authenticated user can create a strategic blueprint under an organization.
-     * @deny (create) User without auth cannot create a strategic blueprint document.
-     * @allow (get, list) Any authenticated user can read strategic blueprints.
-     * @deny (update, delete) No one can update or delete strategic blueprints.
-     * @principle Requires user to be signed in to create a strategic blueprint.
+     * @allow (get) - Any authenticated user can read a strategic blueprint.
+     * @allow (create) - Any authenticated user can create a strategic blueprint.
+     * @allow (update) - No one can update a strategic blueprint.
+     * @allow (delete) - No one can delete a strategic blueprint.
+     * @allow (list) - Any authenticated user can list strategic blueprints for an organization.
+     * @deny (create) - if !isSignedIn()
+     * @deny (update) - if resource == null
+     * @principle Restricts strategic blueprint access to authenticated users.
      */
     match /organizations/{organizationId}/strategicBlueprints/{strategicBlueprintId} {
       allow get, list: if isSignedIn();
-      allow create: if isSignedIn() && request.resource.data.organizationId == organizationId; // Validate that the org ID matches the path
+      allow create: if isSignedIn();
       allow update, delete: if false;
     }
 
     /**
-     * @description Allows creating, reading, updating, and deleting content objects under an organization.
+     * @description Allows CRUD operations on content objects within an organization, restricting access to authenticated users.
      * @path /organizations/{organizationId}/contentObjects/{contentObjectId}
-     * @allow (create) Any authenticated user can create a content object under an organization.
-     * @deny (create) User without auth cannot create a content object document.
-     * @allow (get, list) Any authenticated user can read content objects.
-     * @deny (update, delete) No one can update or delete content objects.
-     * @principle Requires user to be signed in to create a content object.
+     * @allow (get) - Any authenticated user can read a content object.
+     * @allow (create) - Any authenticated user can create a content object.
+     * @allow (update) - No one can update a content object.
+     * @allow (delete) - No one can delete a content object.
+     * @allow (list) - Any authenticated user can list content objects for an organization.
+     * @deny (create) - if !isSignedIn()
+     * @deny (update) - if resource == null
+     * @principle Restricts content object access to authenticated users.
      */
     match /organizations/{organizationId}/contentObjects/{contentObjectId} {
       allow get, list: if isSignedIn();
-      allow create: if isSignedIn() && request.resource.data.strategicBlueprintId != null; // Validate that the strategicBlueprintId exists.
+      allow create: if isSignedIn();
       allow update, delete: if false;
     }
 
     /**
-     * @description Allows creating, reading, updating, and deleting alignment scores for content objects.
+     * @description Allows CRUD operations on alignment scores within a content object, restricting access to authenticated users.
      * @path /organizations/{organizationId}/contentObjects/{contentObjectId}/alignmentScores/{alignmentScoreId}
-     * @allow (create) Any authenticated user can create an alignment score.
-     * @deny (create) User without auth cannot create an alignment score document.
-     * @allow (get, list) Any authenticated user can read alignment scores.
-     * @deny (update, delete) No one can update or delete alignment scores.
-     * @principle Requires user to be signed in to create an alignment score.
+     * @allow (get) - Any authenticated user can read an alignment score.
+     * @allow (create) - Any authenticated user can create an alignment score.
+     * @allow (update) - No one can update an alignment score.
+     * @allow (delete) - No one can delete an alignment score.
+     * @allow (list) - Any authenticated user can list alignment scores for a content object.
+     * @deny (create) - if !isSignedIn()
+     * @deny (update) - if resource == null
+     * @principle Restricts alignment score access to authenticated users.
      */
     match /organizations/{organizationId}/contentObjects/{contentObjectId}/alignmentScores/{alignmentScoreId} {
       allow get, list: if isSignedIn();
-      allow create: if isSignedIn() && request.resource.data.contentObjectId == contentObjectId; // Validate that the contentObjectId matches the path
+      allow create: if isSignedIn();
       allow update, delete: if false;
     }
 
     /**
-     * @description Allows creating, reading, updating, and deleting approval workflows for content objects.
+     * @description Allows CRUD operations on approval workflows within a content object, restricting access to authenticated users.
      * @path /organizations/{organizationId}/contentObjects/{contentObjectId}/approvalWorkflows/{approvalWorkflowId}
-     * @allow (create) Any authenticated user can create an approval workflow.
-     * @deny (create) User without auth cannot create an approval workflow document.
-     * @allow (get, list) Any authenticated user can read approval workflows.
-     * @deny (update, delete) No one can update or delete approval workflows.
-     * @principle Requires user to be signed in to create an approval workflow.
+     * @allow (get) - Any authenticated user can read an approval workflow.
+     * @allow (create) - Any authenticated user can create an approval workflow.
+     * @allow (update) - No one can update an approval workflow.
+     * @allow (delete) - No one can delete an approval workflow.
+     * @allow (list) - Any authenticated user can list approval workflows for a content object.
+     * @deny (create) - if !isSignedIn()
+     * @deny (update) - if resource == null
+     * @principle Restricts approval workflow access to authenticated users.
      */
     match /organizations/{organizationId}/contentObjects/{contentObjectId}/approvalWorkflows/{approvalWorkflowId} {
       allow get, list: if isSignedIn();
-      allow create: if isSignedIn() && request.resource.data.contentObjectId == contentObjectId; // Validate that the contentObjectId matches the path
+      allow create: if isSignedIn();
       allow update, delete: if false;
     }
 
     /**
-     * @description Allows creating, reading, updating, and deleting calendar events for content objects.
+     * @description Allows CRUD operations on calendar events within a content object, restricting access to authenticated users.
      * @path /organizations/{organizationId}/contentObjects/{contentObjectId}/calendarEvents/{calendarEventId}
-     * @allow (create) Any authenticated user can create a calendar event.
-     * @deny (create) User without auth cannot create a calendar event document.
-     * @allow (get, list) Any authenticated user can read calendar events.
-     * @deny (update, delete) No one can update or delete calendar events.
-     * @principle Requires user to be signed in to create a calendar event.
+     * @allow (get) - Any authenticated user can read a calendar event.
+     * @allow (create) - Any authenticated user can create a calendar event.
+     * @allow (update) - No one can update a calendar event.
+     * @allow (delete) - No one can delete a calendar event.
+     * @allow (list) - Any authenticated user can list calendar events for a content object.
+     * @deny (create) - if !isSignedIn()
+     * @deny (update) - if resource == null
+     * @principle Restricts calendar event access to authenticated users.
      */
     match /organizations/{organizationId}/contentObjects/{contentObjectId}/calendarEvents/{calendarEventId} {
       allow get, list: if isSignedIn();
-      allow create: if isSignedIn() && request.resource.data.contentObjectId == contentObjectId; // Validate that the contentObjectId matches the path
+      allow create: if isSignedIn();
       allow update, delete: if false;
     }
 
     /**
-     * @description Allows creating, reading, updating, and deleting audit logs.
+     * @description Allows CRUD operations on audit logs within an organization, restricting access to authenticated users.
      * @path /organizations/{organizationId}/auditLogs/{auditLogId}
-     * @allow (create) Any authenticated user can create an audit log.
-     * @deny (create) User without auth cannot create an audit log document.
-     * @allow (get, list) Any authenticated user can read audit logs.
-     * @deny (update, delete) No one can update or delete audit logs.
-     * @principle Requires user to be signed in to create an audit log.
+     * @allow (get) - Any authenticated user can read an audit log.
+     * @allow (create) - Any authenticated user can create an audit log.
+     * @allow (update) - No one can update an audit log.
+     * @allow (delete) - No one can delete an audit log.
+     * @allow (list) - Any authenticated user can list audit logs for an organization.
+     * @deny (create) - if !isSignedIn()
+     * @deny (update) - if resource == null
+     * @principle Restricts audit log access to authenticated users.
      */
     match /organizations/{organizationId}/auditLogs/{auditLogId} {
       allow get, list: if isSignedIn();
-      allow create: if isSignedIn() && request.resource.data.userId != null; // Validate that the userId exists.
+      allow create: if isSignedIn();
       allow update, delete: if false;
     }
 
     /**
-     * @description Allows creating, reading, updating, and deleting draft content objects under a user's drafts collection. Enforces ownership.
+     * @description Allows a user to create, read, update, and delete their own draft content objects.
      * @path /users/{userId}/drafts/{draftId}
-     * @allow (create) User can create a draft content object if the userId in the path matches their auth UID.
-     * @deny (create) User cannot create a draft content object for another user.
-     * @allow (get) User can get their own draft content object.
-     * @deny (get) User cannot get another user's draft content object.
-     * @allow (list) User can list their own draft content objects.
-     * @deny (list) User cannot list another user's draft content objects.
-     * @allow (update) User can update their own draft content object.
-     * @deny (update) User cannot update another user's draft content object.
-     * @allow (delete) User can delete their own draft content object.
-     * @deny (delete) User cannot delete another user's draft content object.
-     * @principle Enforces document ownership for writes and restricts access to a user's own drafts.
+     * @allow (get) - The user can read their own draft content object.
+     * @allow (create) - The user can create their own draft content object.
+     * @allow (update) - The user can update their own draft content object.
+     * @allow (delete) - The user can delete their own draft content object.
+     * @allow (list) - The user can list their own draft content objects.
+     * @deny (create) - if request.auth.uid != userId
+     * @deny (update) - if request.auth.uid != userId || resource == null
+     * @principle Enforces user-ownership for draft content objects.
      */
     match /users/{userId}/drafts/{draftId} {
       allow get, list: if isOwner(userId);
-      allow create: if isOwner(userId) && request.resource.data.ownerId == userId; // Self-creation: Validate that the ownerId matches the path
-      allow update: if isExistingOwner(userId) && resource.data.ownerId == request.resource.data.ownerId; // Validate ownership and enforce immutability of the ownerId field
+      allow create: if isOwner(userId);
+      allow update: if isExistingOwner(userId);
       allow delete: if isExistingOwner(userId);
     }
 
-    function isSignedIn() {
-      return request.auth != null;
-    }
+  }
 
-    function isOwner(userId) {
-      return request.auth.uid == userId;
-    }
+  // Helper functions
+  function isSignedIn() {
+    return request.auth != null;
+  }
+
+  function isOwner(userId) {
+    return request.auth.uid == userId;
+  }
 
     function isExistingOwner(userId) {
-        return isOwner(userId) && resource != null;
-    }
+    return isOwner(userId) && resource != null;
   }
 }
