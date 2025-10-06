@@ -12,6 +12,7 @@ export type Attachment = {
   name: string;
   url: string;
   type: string;
+  path: string;
 };
 
 export type Draft = {

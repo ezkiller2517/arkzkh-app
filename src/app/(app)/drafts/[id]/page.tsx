@@ -24,15 +24,16 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { contentTemplates } from '@/lib/templates';
-import { useFirebase } from '@/firebase';
-import { ref as storageRef, uploadBytesResumable, getDownloadURL } from "firebase/storage";
+import { useFirebase, useStorage } from '@/firebase';
+import { ref as storageRef, uploadBytesResumable, getDownloadURL, deleteObject } from "firebase/storage";
 
 export default function DraftEditorPage({ params }: { params: { id: string } }) {
   const router = useRouter();
   const { getDraft, userData, submitDraft, approveDraft, rejectDraft, blueprint } = useApp();
-  const { storage, firestore } = useFirebase();
+  const { firestore } = useFirebase();
+  const storage = useStorage();
   const { toast } = useToast();
-  const id = params.id;
+  const { id } = params;
 
   const [draft, setDraft] = useState<Partial<Draft> | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -146,12 +147,12 @@ export default function DraftEditorPage({ params }: { params: { id: string } }) 
       return;
     }
     if (!draft?.id || !userData?.organizationId) {
-        toast({ title: 'Cannot upload file', description: 'Draft or organization not properly loaded.', variant: 'destructive' });
+        toast({ title: 'Cannot upload file', description: 'Draft or organization not properly loaded. Please save the draft and try again.', variant: 'destructive' });
         return;
     }
 
     const file = event.target.files[0];
-    const currentDraftId = draft.id; // Capture id to avoid race conditions with state updates
+    const currentDraftId = draft.id;
     
     setIsUploading(true);
     setUploadProgress(0);
@@ -167,7 +168,7 @@ export default function DraftEditorPage({ params }: { params: { id: string } }) 
       },
       (error) => {
         console.error("File upload error:", error);
-        toast({ title: 'Upload Failed', description: error.message || 'Could not upload the file. Check storage rules.', variant: 'destructive' });
+        toast({ title: 'Upload Failed', description: error.message || 'Could not upload the file. Check storage rules and network.', variant: 'destructive' });
         setIsUploading(false);
         setUploadProgress(0);
       },
@@ -177,9 +178,9 @@ export default function DraftEditorPage({ params }: { params: { id: string } }) 
           name: file.name,
           url: downloadURL,
           type: file.type,
+          path: filePath,
         };
         
-        // Fetch the most recent version of the draft before updating
         const latestDraft = getDraft(currentDraftId) || draft;
         const updatedAttachments = [...(latestDraft.attachments || []), newAttachment];
 
@@ -195,13 +196,26 @@ export default function DraftEditorPage({ params }: { params: { id: string } }) 
     );
   };
 
-  const handleRemoveAttachment = (url: string) => {
+  const handleRemoveAttachment = async (attachmentToRemove: Attachment) => {
     if (!draft?.id) return;
 
-    const updatedAttachments = draft.attachments?.filter(att => att.url !== url) || [];
-    setDraft(d => d ? { ...d, attachments: updatedAttachments } : null);
-    saveDraft({ id: draft.id, attachments: updatedAttachments });
-     toast({ title: 'Attachment Removed' });
+    try {
+        // Create a reference to the file to delete
+        const fileRef = storageRef(storage, attachmentToRemove.path);
+
+        // Delete the file
+        await deleteObject(fileRef);
+
+        // Then, remove the attachment from the draft's data in Firestore
+        const updatedAttachments = draft.attachments?.filter(att => att.url !== attachmentToRemove.url) || [];
+        setDraft(d => d ? { ...d, attachments: updatedAttachments } : null);
+        await saveDraft({ id: draft.id, attachments: updatedAttachments });
+        
+        toast({ title: 'Attachment Removed' });
+    } catch (error: any) {
+        console.error("Error removing attachment: ", error);
+        toast({ title: 'Removal Failed', description: error.message || "Could not remove the attachment.", variant: 'destructive' });
+    }
   }
 
   if (!draft) {
@@ -293,7 +307,7 @@ export default function DraftEditorPage({ params }: { params: { id: string } }) 
                                 variant="destructive"
                                 size="icon"
                                 className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover:opacity-100"
-                                onClick={() => handleRemoveAttachment(file.url)}
+                                onClick={() => handleRemoveAttachment(file)}
                                 >
                                     <Trash2 className="h-4 w-4" />
                                 </Button>
@@ -355,5 +369,3 @@ export default function DraftEditorPage({ params }: { params: { id: string } }) 
     </div>
   );
 }
-
-    
