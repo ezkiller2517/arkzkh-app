@@ -21,10 +21,11 @@ export function initializeFirebase() {
     firebaseApp = initializeApp(firebaseConfig);
     // Initialize App Check only on the client
     if (typeof window !== 'undefined') {
+      // Pass your reCAPTCHA v3 site key (public key) to activate().
+      // You can get this key from the Google Cloud console.
       initializeAppCheck(firebaseApp, {
-        // TODO: Replace with your reCAPTCHA Enterprise site key
-        provider: new ReCaptchaEnterpriseProvider('YOUR_RECAPTCHA_ENTERPRISE_SITE_KEY'),
-        isTokenAutoRefreshEnabled: true,
+        provider: new ReCaptchaEnterpriseProvider('6Ld-8RwqAAAAAN0zO9lS8z5i4sXma5aB2Y_wz-eG' /* reCAPTCHA enterprise site key */),
+        isTokenAutoRefreshEnabled: true
       });
     }
   } else {
@@ -35,7 +36,8 @@ export function initializeFirebase() {
   auth = getAuth(firebaseApp);
   firestore = getFirestore(firebaseApp);
   storage = getStorage(firebaseApp);
-  functions = getFunctions(firebaseApp);
+  // us-central1 is the default region for functions
+  functions = getFunctions(firebaseApp, 'us-central1');
 
   return { firebaseApp, auth, firestore, storage, functions };
 }

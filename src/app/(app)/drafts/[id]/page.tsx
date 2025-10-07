@@ -31,7 +31,8 @@ import { httpsCallable } from 'firebase/functions';
 
 export default function DraftEditorPage() {
   const router = useRouter();
-  const { id } = useParams<{ id: string }>();
+  const params = useParams<{ id: string }>();
+  const id = params.id;
   const { getDraft, userData, submitDraft, approveDraft, rejectDraft, blueprint } = useApp();
   const { firestore, functions } = useFirebase();
   const storage = useStorage();
@@ -88,7 +89,7 @@ export default function DraftEditorPage() {
     }
   };
 
-  const handleSave = async (redirect: boolean = false) => {
+  const handleSave = async () => {
     if (!draft?.id || !draft.title) {
         // If title is empty, create a temporary one for saving
         const draftTitle = draft?.title || `New Draft ${new Date().toLocaleTimeString()}`;
@@ -107,17 +108,14 @@ export default function DraftEditorPage() {
     try {
         await saveDraft(draftData);
         toast({ title: 'Draft Saved', description: `Draft "${draftData.title}" has been saved.` });
-        if (redirect) {
+        if (id === 'new') {
             router.replace(`/drafts/${draftData.id}`);
-            return true; // Indicate success for chaining
         }
     } catch (error) {
         // Error is already toasted in saveDraft
-        return false; // Indicate failure
     } finally {
         setIsSaving(false);
     }
-    return true;
   };
 
   const handleScoreAlignment = async () => {
@@ -158,19 +156,7 @@ export default function DraftEditorPage() {
     }
   }
 
-  const handleUploadClick = async () => {
-    // If it's a new draft that hasn't been saved, save it first.
-    if (id === 'new' && draft?.id) {
-        const success = await handleSave(true); // Save and redirect
-        if (success) {
-            // After redirect, the page reloads with the new ID,
-            // so we don't trigger the input click here.
-            // A more seamless UX would trigger the click after page load.
-            toast({ title: 'Draft created', description: 'You can now upload media.'});
-        }
-        // Don't open file dialog if save fails or is in progress
-        return;
-    }
+  const handleUploadClick = () => {
     fileInputRef.current?.click();
   };
 
@@ -301,7 +287,7 @@ export default function DraftEditorPage() {
                         <Button onClick={() => draft.id && approveDraft(draft.id)}>Approve</Button>
                     </>
                 )}
-                <Button onClick={() => handleSave()} disabled={isSaving}>
+                <Button onClick={handleSave} disabled={isSaving}>
                   {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Save Draft
                 </Button>
