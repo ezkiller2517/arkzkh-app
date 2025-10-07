@@ -1,12 +1,33 @@
 rules_version = '2';
-
 service firebase.storage {
   match /b/{bucket}/o {
-    // Allow read and write access to all paths for any authenticated user.
-    // This is a broad rule for debugging and initial development.
-    // In a production environment, you would want to restrict this further.
-    match /{allPaths=**} {
-      allow read, write: if request.auth != null;
+    // Helper functions to improve readability
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // This function assumes you have set an 'organizationId' custom claim on your users.
+    // Without this, rule will fail. See Firebase docs on setting custom claims.
+    function isUserInOrg(orgId) {
+      return isAuthenticated() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.organizationId == orgId;
+    }
+    
+    function isAdmin(orgId) {
+        return isUserInOrg(orgId) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Admin';
+    }
+
+    // Match the path for draft uploads.
+    // Allows any authenticated user of an organization to write into the drafts folder for that org.
+    match /organizations/{orgId}/drafts/{draftId}/{allPaths=**} {
+      allow read, write: if isUserInOrg(orgId);
+    }
+
+    // A more general rule that could allow admins to access anything within their organization's folder.
+    // This is optional and provides an admin override.
+    match /organizations/{orgId}/{allPaths=**} {
+      allow read, write: if isAdmin(orgId);
     }
   }
 }
+
+    

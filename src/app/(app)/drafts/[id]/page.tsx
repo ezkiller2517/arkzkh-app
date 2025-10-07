@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useParams } from 'next/navigation';
 import { v4 as uuidv4 } from 'uuid';
 import { Loader2, Sparkles, FileUp, Paperclip, Image as ImageIcon, Video, File as FileIcon, Trash2 } from 'lucide-react';
 import { useApp } from '@/components/app-provider';
@@ -27,13 +27,13 @@ import { contentTemplates } from '@/lib/templates';
 import { useFirebase, useStorage } from '@/firebase';
 import { ref as storageRef, uploadBytesResumable, getDownloadURL, deleteObject } from "firebase/storage";
 
-export default function DraftEditorPage({ params }: { params: { id: string } }) {
+export default function DraftEditorPage() {
   const router = useRouter();
+  const { id } = useParams<{ id: string }>();
   const { getDraft, userData, submitDraft, approveDraft, rejectDraft, blueprint } = useApp();
   const { firestore } = useFirebase();
   const storage = useStorage();
   const { toast } = useToast();
-  const id = params.id;
 
   const [draft, setDraft] = useState<Partial<Draft> | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -156,111 +156,80 @@ export default function DraftEditorPage({ params }: { params: { id: string } }) 
     }
   }
 
-  const handleUploadClick = async () => {
-    if (id === 'new') {
-        const success = await handleSave(true);
-        if (success) {
-           // The page will redirect, and the effect will pick up the new ID.
-           // We'll trigger the click after a short delay to allow the redirect to process.
-           setTimeout(() => {
-               fileInputRef.current?.click();
-           }, 500);
-        } else {
-            toast({
-                title: 'Could Not Start Upload',
-                description: 'Failed to save the initial draft before uploading.',
-                variant: 'destructive',
-            });
-        }
-        return;
-    }
+  const handleUploadClick = () => {
     fileInputRef.current?.click();
   };
 
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (!event.target.files || event.target.files.length === 0) {
-      return;
-    }
-
-    const file = event.target.files[0];
-
-    // Re-check conditions at time of upload
-    if (!draft?.id || id === 'new') {
-      toast({ title: 'Cannot upload file', description: 'Please save the draft first.', variant: 'destructive' });
-      return;
-    }
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+  
+    const file = files[0];
+  
+    const draftId = draft?.id ?? uuidv4();
+    if (!draft?.id) setDraft(d => d ? { ...d, id: draftId } : { id: draftId } as any);
+  
     if (!userData?.organizationId) {
-      toast({ title: 'Cannot upload file', description: 'Organization not properly loaded.', variant: 'destructive' });
+      toast({ title: 'Cannot upload', description: 'Organization not loaded.', variant: 'destructive' });
       return;
     }
-    if (!storage) {
-      toast({ title: 'Cannot upload file', description: 'Storage service is not available.', variant: 'destructive' });
-      return;
-    }
-
-    const currentDraftId = draft.id;
-    
+  
+    const orgId = userData.organizationId;
+    const safeName = `${Date.now()}-${file.name.replace(/\s+/g, '_')}`;
+    const filePath = `organizations/${orgId}/drafts/${draftId}/${safeName}`;
+    const meta = { contentType: file.type || 'application/octet-stream' };
+  
     setIsUploading(true);
     setUploadProgress(0);
-
-    const filePath = `organizations/${userData.organizationId}/drafts/${currentDraftId}/${file.name}`;
-    const fileStorageRef = storageRef(storage, filePath);
-    const uploadTask = uploadBytesResumable(fileStorageRef, file);
-
-    uploadTask.on('state_changed',
-      (snapshot) => {
-        const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-        setUploadProgress(progress);
-      },
-      (error) => {
-        // --- Enhanced Error Handling ---
-        console.error("File upload error:", error);
-        console.error("Firebase Storage Error Code:", error.code);
-        console.error("Firebase Storage Error Message:", error.message);
-        
-        toast({ 
-          title: 'Upload Failed', 
-          description: `Error: ${error.message} (${error.code})`, 
-          variant: 'destructive',
-          duration: 9000,
-        });
-
-        setIsUploading(false);
-        setUploadProgress(0);
-      },
-      async () => {
-        // --- Enhanced Finalization Logic with Error Handling ---
-        try {
-            const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-            const newAttachment: Attachment = {
-                name: file.name,
-                url: downloadURL,
-                type: file.type,
-                path: filePath,
-            };
-            
-            const updatedAttachments = [...(draft.attachments || []), newAttachment];
-            // Update local state immediately for better UX
-            setDraft(d => d ? { ...d, attachments: updatedAttachments } : null);
-            
-            // Save the new attachment array to Firestore
-            await saveDraft({ id: currentDraftId, attachments: updatedAttachments });
-
-            toast({ title: 'File Uploaded', description: `${file.name} has been attached.` });
-        } catch (error: any) {
-             console.error("Error finalizing upload:", error);
-             toast({ 
-                title: 'Upload Failed', 
-                description: `Could not get download URL or save to draft: ${error.message}`, 
-                variant: 'destructive',
-                duration: 9000,
-            });
-        } finally {
-            setIsUploading(false);
-            if(fileInputRef.current) fileInputRef.current.value = '';
+  
+    try {
+      const fileRef = storageRef(storage, filePath);
+      const task = uploadBytesResumable(fileRef, file, meta);
+  
+      task.on(
+        'state_changed',
+        snap => setUploadProgress((snap.bytesTransferred / snap.totalBytes) * 100),
+        (err: any) => {
+          const map: Record<string, string> = {
+            'storage/unauthorized': 'Blocked by Storage rules or App Check.',
+            'storage/canceled': 'Upload canceled.',
+            'storage/retry-limit-exceeded': 'Temporary network issue. Please retry.',
+            'storage/quota-exceeded': 'Bucket quota exceeded.',
+          };
+          console.error('Upload error:', err);
+          toast({ title: 'Upload failed', description: map[err.code] || err.message, variant: 'destructive', duration: 9000 });
+          setIsUploading(false);
+          setUploadProgress(0);
+          if (fileInputRef.current) fileInputRef.current.value = '';
+        },
+        async () => {
+          const url = await getDownloadURL(task.snapshot.ref);
+          const newAttachment: Attachment = { name: file.name, url, type: file.type, path: filePath };
+  
+          const updated = [...(draft?.attachments || []), newAttachment];
+          setDraft(d => (d ? { ...d, id: draftId, attachments: updated } : { id: draftId, attachments: updated } as any));
+  
+          await saveDraft({ id: draftId, title: draft?.title ?? `New Draft ${new Date().toLocaleTimeString()}`, attachments: updated });
+  
+          if (!draft?.content) {
+            const guess =
+              file.type.startsWith('image/') ? 'socialMediaPost' :
+              /memo|pdf|doc/i.test(file.name) ? 'internalMemo' :
+              'blogArticle';
+            const t = contentTemplates[guess];
+            if (t) setDraft(d => (d ? { ...d, content: t.content } : d));
+          }
+  
+          toast({ title: 'File uploaded', description: file.name });
+          setIsUploading(false);
+          if (fileInputRef.current) fileInputRef.current.value = '';
         }
-      }
-    );
+      );
+    } catch (e: any) {
+      console.error('Upload init error:', e);
+      toast({ title: 'Upload init failed', description: e.message || 'Check App Check and rules.', variant: 'destructive' });
+      setIsUploading(false);
+    }
   };
 
   const handleRemoveAttachment = async (attachmentToRemove: Attachment) => {
@@ -281,9 +250,12 @@ export default function DraftEditorPage({ params }: { params: { id: string } }) 
     }
   }
 
-  if (!draft) {
+  if (!draft && id !== 'new') {
     return <div className="flex justify-center items-center h-screen"><Loader2 className="h-8 w-8 animate-spin" /></div>;
   }
+  
+  if (!draft) return null; // Should be handled by the loading state above or redirect.
+
 
   const canEdit = userData?.role === 'Admin' || (userData?.role === 'Approver' && draft.status === 'In Review') || (userData?.role === 'Contributor' && draft.status === 'Draft');
 
@@ -432,3 +404,5 @@ export default function DraftEditorPage({ params }: { params: { id: string } }) 
     </div>
   );
 }
+
+    
