@@ -165,7 +165,6 @@ export default function DraftEditorPage() {
         if (success) {
             // After redirect, the page reloads with the new ID,
             // so we don't trigger the input click here.
-            // A useEffect could trigger it, but for now, let's have the user click again.
             // A more seamless UX would trigger the click after page load.
             toast({ title: 'Draft created', description: 'You can now upload media.'});
         }
