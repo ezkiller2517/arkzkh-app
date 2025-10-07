@@ -5,6 +5,7 @@ import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
 import { getAuth, Auth } from 'firebase/auth';
 import { getFirestore, Firestore } from 'firebase/firestore';
 import { getStorage, FirebaseStorage } from 'firebase/storage';
+import { initializeAppCheck, ReCaptchaEnterpriseProvider } from 'firebase/app-check';
 
 // Store SDK instances
 let firebaseApp: FirebaseApp;
@@ -14,15 +15,15 @@ let storage: FirebaseStorage;
 
 // IMPORTANT: DO NOT MODIFY THIS FUNCTION
 export function initializeFirebase() {
-  if (!getApps().length) {
-    try {
-      // Attempt to initialize via Firebase App Hosting environment variables
-      firebaseApp = initializeApp();
-    } catch (e) {
-      if (process.env.NODE_ENV === "production") {
-        console.warn('Automatic initialization failed. Falling back to firebase config object.', e);
-      }
-      firebaseApp = initializeApp(firebaseConfig);
+  if (getApps().length === 0) {
+    firebaseApp = initializeApp(firebaseConfig);
+    // Initialize App Check only on the client
+    if (typeof window !== 'undefined') {
+      initializeAppCheck(firebaseApp, {
+        // TODO: Replace with your reCAPTCHA Enterprise site key
+        provider: new ReCaptchaEnterpriseProvider('YOUR_RECAPTCHA_ENTERPRISE_SITE_KEY'),
+        isTokenAutoRefreshEnabled: true,
+      });
     }
   } else {
     firebaseApp = getApp();
