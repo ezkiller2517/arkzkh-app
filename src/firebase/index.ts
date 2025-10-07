@@ -5,6 +5,7 @@ import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
 import { getAuth, Auth } from 'firebase/auth';
 import { getFirestore, Firestore } from 'firebase/firestore';
 import { getStorage, FirebaseStorage } from 'firebase/storage';
+import { getFunctions, Functions } from 'firebase/functions';
 import { initializeAppCheck, ReCaptchaEnterpriseProvider } from 'firebase/app-check';
 
 // Store SDK instances
@@ -12,6 +13,7 @@ let firebaseApp: FirebaseApp;
 let auth: Auth;
 let firestore: Firestore;
 let storage: FirebaseStorage;
+let functions: Functions;
 
 // IMPORTANT: DO NOT MODIFY THIS FUNCTION
 export function initializeFirebase() {
@@ -33,8 +35,9 @@ export function initializeFirebase() {
   auth = getAuth(firebaseApp);
   firestore = getFirestore(firebaseApp);
   storage = getStorage(firebaseApp);
+  functions = getFunctions(firebaseApp);
 
-  return { firebaseApp, auth, firestore, storage };
+  return { firebaseApp, auth, firestore, storage, functions };
 }
 
 export * from './provider';

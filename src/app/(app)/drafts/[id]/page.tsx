@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { v4 as uuidv4 } from 'uuid';
-import { Loader2, Sparkles, FileUp, Paperclip, Image as ImageIcon, Video, File as FileIcon, Trash2 } from 'lucide-react';
+import { Loader2, Sparkles, FileUp, Paperclip, ImageIcon, Video, File as FileIcon, Trash2 } from 'lucide-react';
 import { useApp } from '@/components/app-provider';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -25,13 +25,15 @@ import {
 } from "@/components/ui/select";
 import { contentTemplates } from '@/lib/templates';
 import { useFirebase, useStorage } from '@/firebase';
-import { ref as storageRef, uploadBytesResumable, getDownloadURL, deleteObject } from "firebase/storage";
+import { ref as storageRef, getDownloadURL, deleteObject } from "firebase/storage";
+import { httpsCallable } from 'firebase/functions';
+
 
 export default function DraftEditorPage() {
   const router = useRouter();
   const { id } = useParams<{ id: string }>();
   const { getDraft, userData, submitDraft, approveDraft, rejectDraft, blueprint } = useApp();
-  const { firestore } = useFirebase();
+  const { firestore, functions } = useFirebase();
   const storage = useStorage();
   const { toast } = useToast();
 
@@ -156,81 +158,109 @@ export default function DraftEditorPage() {
     }
   }
 
-  const handleUploadClick = () => {
+  const handleUploadClick = async () => {
+    // If it's a new draft that hasn't been saved, save it first.
+    if (id === 'new' && draft?.id) {
+        const success = await handleSave(true); // Save and redirect
+        if (success) {
+            // After redirect, the page reloads with the new ID,
+            // so we don't trigger the input click here.
+            // A useEffect could trigger it, but for now, let's have the user click again.
+            // A more seamless UX would trigger the click after page load.
+            toast({ title: 'Draft created', description: 'You can now upload media.'});
+        }
+        // Don't open file dialog if save fails or is in progress
+        return;
+    }
     fileInputRef.current?.click();
   };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
-    if (!files || files.length === 0) return;
-  
+    if (!files || !files.length) return;
     const file = files[0];
   
+    // ensure we have ids without blocking UX
     const draftId = draft?.id ?? uuidv4();
-    if (!draft?.id) setDraft(d => d ? { ...d, id: draftId } : { id: draftId } as any);
+    if (!draft?.id) setDraft(d => (d ? { ...d, id: draftId } : { id: draftId } as any));
   
     if (!userData?.organizationId) {
       toast({ title: 'Cannot upload', description: 'Organization not loaded.', variant: 'destructive' });
       return;
     }
   
-    const orgId = userData.organizationId;
-    const safeName = `${Date.now()}-${file.name.replace(/\s+/g, '_')}`;
-    const filePath = `organizations/${orgId}/drafts/${draftId}/${safeName}`;
-    const meta = { contentType: file.type || 'application/octet-stream' };
-  
     setIsUploading(true);
     setUploadProgress(0);
   
     try {
-      const fileRef = storageRef(storage, filePath);
-      const task = uploadBytesResumable(fileRef, file, meta);
+      // 1) Ask server for a signed URL
+      const getUrl = httpsCallable(functions, 'getSignedUploadUrl');
+      const resp = await getUrl({
+        orgId: userData.organizationId,
+        draftId,
+        fileName: file.name,
+        contentType: file.type || 'application/octet-stream',
+      });
+      const { url, objectPath } = resp.data as { url: string; objectPath: string; bucket: string };
   
-      task.on(
-        'state_changed',
-        snap => setUploadProgress((snap.bytesTransferred / snap.totalBytes) * 100),
-        (err: any) => {
-          const map: Record<string, string> = {
-            'storage/unauthorized': 'Blocked by Storage rules or App Check.',
-            'storage/canceled': 'Upload canceled.',
-            'storage/retry-limit-exceeded': 'Temporary network issue. Please retry.',
-            'storage/quota-exceeded': 'Bucket quota exceeded.',
-          };
-          console.error('Upload error:', err);
-          toast({ title: 'Upload failed', description: map[err.code] || err.message, variant: 'destructive', duration: 9000 });
-          setIsUploading(false);
-          setUploadProgress(0);
-          if (fileInputRef.current) fileInputRef.current.value = '';
-        },
-        async () => {
-          const url = await getDownloadURL(task.snapshot.ref);
-          const newAttachment: Attachment = { name: file.name, url, type: file.type, path: filePath };
-  
-          const updated = [...(draft?.attachments || []), newAttachment];
-          setDraft(d => (d ? { ...d, id: draftId, attachments: updated } : { id: draftId, attachments: updated } as any));
-  
-          await saveDraft({ id: draftId, title: draft?.title ?? `New Draft ${new Date().toLocaleTimeString()}`, attachments: updated });
-  
-          if (!draft?.content) {
-            const guess =
-              file.type.startsWith('image/') ? 'socialMediaPost' :
-              /memo|pdf|doc/i.test(file.name) ? 'internalMemo' :
-              'blogArticle';
-            const t = contentTemplates[guess];
-            if (t) setDraft(d => (d ? { ...d, content: t.content } : d));
+      // 2) PUT the file with progress (XHR for progress events)
+      await new Promise<void>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('PUT', url, true);
+        xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
+        xhr.upload.onprogress = (evt) => {
+          if (evt.lengthComputable) {
+            setUploadProgress((evt.loaded / evt.total) * 100);
           }
+        };
+        xhr.onerror = () => reject(new Error('Network error during upload.'));
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) resolve();
+          else reject(new Error(`Signed URL upload failed: ${xhr.status} ${xhr.statusText}`));
+        };
+        xhr.send(file);
+      });
   
-          toast({ title: 'File uploaded', description: file.name });
-          setIsUploading(false);
-          if (fileInputRef.current) fileInputRef.current.value = '';
-        }
-      );
-    } catch (e: any) {
-      console.error('Upload init error:', e);
-      toast({ title: 'Upload init failed', description: e.message || 'Check App Check and rules.', variant: 'destructive' });
+      // 3) Get a standard downloadURL (so the rest of your app works unchanged)
+      const sdkRef = storageRef(storage, objectPath);
+      const downloadURL = await getDownloadURL(sdkRef);
+  
+      const newAttachment: Attachment = {
+        name: file.name,
+        url: downloadURL,
+        type: file.type,
+        path: objectPath,
+      };
+  
+      const updated = [...(draft?.attachments || []), newAttachment];
+      setDraft(d => (d ? { ...d, id: draftId, attachments: updated } : { id: draftId, attachments: updated } as any));
+  
+      await saveDraft({
+        id: draftId,
+        title: draft?.title ?? `New Draft ${new Date().toLocaleTimeString()}`,
+        attachments: updated,
+      });
+  
+      // optional: quick template guess
+      if (!draft?.content) {
+        const guess =
+          file.type.startsWith('image/') ? 'socialMediaPost' :
+          /memo|pdf|doc/i.test(file.name) ? 'internalMemo' :
+          'blogArticle';
+        const t = contentTemplates[guess];
+        if (t) setDraft(d => (d ? { ...d, content: t.content } : d));
+      }
+  
+      toast({ title: 'File uploaded', description: file.name });
+    } catch (err: any) {
+      console.error('Signed upload error:', err);
+      toast({ title: 'Upload failed', description: err.message || String(err), variant: 'destructive', duration: 9000 });
+    } finally {
       setIsUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
+
 
   const handleRemoveAttachment = async (attachmentToRemove: Attachment) => {
     if (!draft?.id) return;
@@ -404,5 +434,3 @@ export default function DraftEditorPage() {
     </div>
   );
 }
-
-    
