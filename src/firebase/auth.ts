@@ -1,12 +1,15 @@
-'use client';
-import { Auth, GoogleAuthProvider, signInWithPopup } from "firebase/auth";
+// src/firebase/auth.ts
+import { getAuth, GoogleAuthProvider, signInWithRedirect, signOut } from "firebase/auth";
+import { app } from "./config"; // keep your existing app import
 
-export async function signInWithGoogle(auth: Auth) {
-  const provider = new GoogleAuthProvider();
-  try {
-    await signInWithPopup(auth, provider);
-  } catch (error) {
-    console.error("Error signing in with Google", error);
-    // Optionally, handle specific error codes
-  }
+const auth = getAuth(app);
+const provider = new GoogleAuthProvider();
+
+export function signInWithGoogle() {
+  // Redirect flow works reliably inside Studio preview
+  return signInWithRedirect(auth, provider);
+}
+
+export function signOutUser() {
+  return signOut(auth);
 }
