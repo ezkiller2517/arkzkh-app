@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
-import { useRouter, useParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { v4 as uuidv4 } from 'uuid';
 import { Loader2, Sparkles, FileUp, Paperclip, ImageIcon, Video, File as FileIcon, Trash2 } from 'lucide-react';
 import { useApp } from '@/components/app-provider';
@@ -27,6 +27,7 @@ import { contentTemplates } from '@/lib/templates';
 import { useFirebase, useStorage } from '@/firebase';
 import { ref as storageRef, getDownloadURL, deleteObject } from "firebase/storage";
 import { httpsCallable } from 'firebase/functions';
+import { useParams } from 'next/navigation';
 
 
 export default function DraftEditorPage() {
