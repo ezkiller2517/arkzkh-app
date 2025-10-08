@@ -1,5 +1,6 @@
 'use client';
-
+import { getSignedUploadUrl } from "../../../firebase/functions"; 
+// path note: from app/(app)/drafts/[id]/page.tsx up three levels to src/, then firebase/functions
 import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { v4 as uuidv4 } from 'uuid';
