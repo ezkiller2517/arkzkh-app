@@ -18,7 +18,9 @@ export default function LoginPage() {
   }, [user, isUserLoading, router]);
 
   const handleSignIn = async () => {
-    await signInWithGoogle(auth);
+    if (auth) {
+      await signInWithGoogle(auth);
+    }
   };
   
   if (isUserLoading || user) {
@@ -34,7 +36,7 @@ export default function LoginPage() {
         <div className="flex flex-col items-center space-y-4">
           <h1 className="text-2xl font-bold">Welcome Back</h1>
           <p className="text-muted-foreground">Sign in to access your dashboard.</p>
-          <Button onClick={handleSignIn} className="w-full">
+          <Button onClick={handleSignIn} className="w-full" disabled={!auth}>
             Sign In with Google
           </Button>
         </div>

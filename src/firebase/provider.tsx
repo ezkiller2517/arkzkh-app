@@ -1,5 +1,5 @@
 'use client';
-
+import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
 import React, { DependencyList, createContext, useContext, ReactNode, useMemo, useState, useEffect } from 'react';
 import { FirebaseApp } from 'firebase/app';
 import { Firestore } from 'firebase/firestore';
@@ -76,6 +76,25 @@ export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
     isUserLoading: true, // Start loading until first auth event
     userError: null,
   });
+// Add this inside FirebaseProvider, before the `return`
+useEffect(() => {
+  if (typeof window === 'undefined' || !firebaseApp) return;
+
+  // In dev, prevent blocks while setting things up
+  // @ts-ignore
+  self.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+
+  try {
+    initializeAppCheck(firebaseApp, {
+      provider: new ReCaptchaV3Provider(
+        process.env.NEXT_PUBLIC_APPCHECK_SITE_KEY as string
+      ),
+      isTokenAutoRefreshEnabled: true,
+    });
+  } catch {
+    // Safe to ignore if it was already initialized (Next.js fast refresh etc.)
+  }
+}, [firebaseApp]);
 
   // Effect to subscribe to Firebase auth state changes
   useEffect(() => {
