@@ -1,1 +1,2 @@
-export { getSignedUploadUrl } from './getSignedUploadUrl';
+// functions/src/index.ts
+export { getSignedUploadUrl } from "./getSignedUploadUrl";

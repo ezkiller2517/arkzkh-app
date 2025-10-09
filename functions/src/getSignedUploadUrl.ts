@@ -1,8 +1,13 @@
+
 import * as functions from 'firebase-functions';
 import * as admin from 'firebase-admin';
 import { getStorage } from 'firebase-admin/storage';
 
-admin.initializeApp();
+try {
+  admin.initializeApp();
+} catch (e) {
+  // This can happen with multiple function definitions
+}
 
 export const getSignedUploadUrl = functions.https.onCall(async (data, context) => {
   if (!context.auth) {
@@ -11,14 +16,16 @@ export const getSignedUploadUrl = functions.https.onCall(async (data, context) =
 
   const { orgId, draftId, fileName, contentType } = data || {};
   if (!orgId || !draftId || !fileName) {
-    throw new functions.https.HttpsError('invalid-argument', 'orgId, draftId, and fileName are required.');
+    throw new functions.https\
+.HttpsError('invalid-argument', 'orgId, draftId, and fileName are required.');
   }
 
   // Optionally enforce org claim on server side
-  // const claimOrg = (context.auth.token as any).organizationId;
-  // if (claimOrg && claimOrg !== orgId) {
-  //   throw new functions.https.HttpsError('permission-denied', 'Wrong organization.');
-  // }
+  const claimOrg = (context.auth.token as any).organizationId;
+  if (claimOrg && claimOrg !== orgId) {
+    throw new functions.https\
+.HttpsError('permission-denied', 'Wrong organization.');
+  }
 
   const bucket = getStorage().bucket(); // default bucket from your project
   const safeName = `${Date.now()}-${String(fileName).replace(/\s+/g, '_')}`;
