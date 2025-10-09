@@ -1,4 +1,5 @@
 'use client';
+import { getMetadata, ref as storageRef } from 'firebase/storage';
 import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
 import React, { DependencyList, createContext, useContext, ReactNode, useMemo, useState, useEffect } from 'react';
 import { FirebaseApp } from 'firebase/app';
@@ -77,6 +78,7 @@ export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
     userError: null,
   });
 // Add this inside FirebaseProvider, before the `return`
+// 1) Initialize App Check once
 useEffect(() => {
   if (typeof window === 'undefined' || !firebaseApp) return;
 
@@ -92,9 +94,17 @@ useEffect(() => {
       isTokenAutoRefreshEnabled: true,
     });
   } catch {
-    // Safe to ignore if it was already initialized (Next.js fast refresh etc.)
+    // OK if it was already initialized (Next.js fast refresh, etc.)
   }
 }, [firebaseApp]);
+
+// 2) One-time Storage "probe" so App Check sees verified Storage traffic
+useEffect(() => {
+  if (typeof window === 'undefined' || !storage) return;
+  // This may 404 — that's fine. We just need a Storage SDK request to occur.
+  getMetadata(storageRef(storage, '__appcheck_probe__.txt')).catch(() => {});
+}, [storage]);
+
 
   // Effect to subscribe to Firebase auth state changes
   useEffect(() => {
