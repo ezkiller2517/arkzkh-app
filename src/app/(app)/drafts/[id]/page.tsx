@@ -1,10 +1,8 @@
 'use client';
-import { getSignedUploadUrl } from "../../../firebase/functions"; 
-// path note: from app/(app)/drafts/[id]/page.tsx up three levels to src/, then firebase/functions
 import { useEffect, useState, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useParams } from 'next/navigation';
 import { v4 as uuidv4 } from 'uuid';
-import { Loader2, Sparkles, FileUp, Paperclip, ImageIcon, Video, File as FileIcon, Trash2 } from 'lucide-react';
+import { Loader2, Sparkles, FileUp, Paperclip, Video, File as FileIcon, Trash2 } from 'lucide-react';
 import { useApp } from '@/components/app-provider';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -28,8 +26,6 @@ import { contentTemplates } from '@/lib/templates';
 import { useFirebase, useStorage } from '@/firebase';
 import { ref as storageRef, getDownloadURL, deleteObject } from "firebase/storage";
 import { httpsCallable } from 'firebase/functions';
-import { useParams } from 'next/navigation';
-
 
 export default function DraftEditorPage() {
   const router = useRouter();
@@ -188,7 +184,7 @@ export default function DraftEditorPage() {
         fileName: file.name,
         contentType: file.type || 'application/octet-stream',
       });
-      const { url, objectPath } = resp.data as { url: string; objectPath: string; bucket: string };
+      const { url, objectPath } = resp.data as { url: string; objectPath: string };
   
       // 2) PUT the file with progress (XHR for progress events)
       await new Promise<void>((resolve, reject) => {

@@ -1,6 +1,6 @@
 'use client';
 import { getMetadata, ref as storageRef } from 'firebase/storage';
-import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
+import { initializeAppCheck, ReCaptchaEnterpriseProvider } from 'firebase/app-check';
 import React, { DependencyList, createContext, useContext, ReactNode, useMemo, useState, useEffect } from 'react';
 import { FirebaseApp } from 'firebase/app';
 import { Firestore } from 'firebase/firestore';
@@ -77,33 +77,35 @@ export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
     isUserLoading: true, // Start loading until first auth event
     userError: null,
   });
-// Add this inside FirebaseProvider, before the `return`
-// 1) Initialize App Check once
-useEffect(() => {
-  if (typeof window === 'undefined' || !firebaseApp) return;
 
-  // In dev, prevent blocks while setting things up
-  // @ts-ignore
-  self.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+  // 1) Initialize App Check once
+  useEffect(() => {
+    if (typeof window === 'undefined' || !firebaseApp) return;
 
-  try {
-    initializeAppCheck(firebaseApp, {
-      provider: new ReCaptchaV3Provider(
-        process.env.NEXT_PUBLIC_APPCHECK_SITE_KEY as string
-      ),
-      isTokenAutoRefreshEnabled: true,
-    });
-  } catch {
-    // OK if it was already initialized (Next.js fast refresh, etc.)
-  }
-}, [firebaseApp]);
+    // In dev, you can set this to true to get a debug token in the console.
+    // @ts-ignore
+    self.FIREBASE_APPCHECK_DEBUG_TOKEN = process.env.NODE_ENV === 'development';
 
-// 2) One-time Storage "probe" so App Check sees verified Storage traffic
-useEffect(() => {
-  if (typeof window === 'undefined' || !storage) return;
-  // This may 404 — that's fine. We just need a Storage SDK request to occur.
-  getMetadata(storageRef(storage, '__appcheck_probe__.txt')).catch(() => {});
-}, [storage]);
+    try {
+      // IMPORTANT: Replace with your actual reCAPTCHA Enterprise Site Key
+      const reCaptchaSiteKey = '6Ld-8RwqAAAAAN0zO9lS8z5i4sXma5aB2Y_wz-eG';
+      
+      initializeAppCheck(firebaseApp, {
+        provider: new ReCaptchaEnterpriseProvider(reCaptchaSiteKey),
+        isTokenAutoRefreshEnabled: true,
+      });
+      console.log('Firebase App Check initialized.');
+    } catch(e) {
+      console.warn('App Check already initialized or failed to initialize:', e);
+    }
+  }, [firebaseApp]);
+
+  // 2) One-time Storage "probe" so App Check sees verified Storage traffic
+  useEffect(() => {
+    if (typeof window === 'undefined' || !storage) return;
+    // This may 404 — that's fine. We just need a Storage SDK request to occur.
+    getMetadata(storageRef(storage, '__appcheck_probe__.txt')).catch(() => {});
+  }, [storage]);
 
 
   // Effect to subscribe to Firebase auth state changes
