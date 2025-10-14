@@ -4,25 +4,35 @@ import { useEffect, useState, useRef } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { v4 as uuidv4 } from 'uuid';
 import { Loader2, Sparkles, FileUp, Paperclip, Video, File as FileIcon, Trash2 } from 'lucide-react';
+
 import { useApp } from '@/components/app-provider';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
+
 import type { Draft, Attachment } from '@/lib/types';
-import { scoreContentAlignment } from '@/ai/flows/score-content-alignment';
-import type { ScoreContentAlignmentOutput } from '@/ai/types';
+import { contentTemplates } from '@/lib/templates';
+import uploadViaSignedUrl from '@/lib/uploadSignedUrl';
+
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Progress } from '@/components/ui/progress';
+
 import { serverTimestamp, doc, setDoc } from 'firebase/firestore';
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select";
-import { contentTemplates } from '@/lib/templates';
+
+import { scoreContentAlignment } from '@/ai/flows/score-content-alignment';
+import type { ScoreContentAlignmentOutput } from '@/ai/types';
+
 import { useFirebase, useStorage } from '@/firebase';
-import { ref as storageRef, getDownloadURL, deleteObject } from "firebase/storage";
-import { uploadViaSignedUrl } from '@/lib/uploadSignedUrl';
+import { ref as storageRef, deleteObject } from "firebase/storage";
 
 export default function DraftEditorPage() {
   const router = useRouter();
@@ -42,6 +52,8 @@ export default function DraftEditorPage() {
   const [aiResult, setAiResult] = useState<ScoreContentAlignmentOutput | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // -- helpers ---------------------------------------------------------------
+
   const saveDraft = async (draftData: Partial<Draft> & { id: string }) => {
     if (!userData?.organizationId) {
       toast({ title: 'Error Saving', description: 'Organization data is not loaded.', variant: 'destructive' });
@@ -56,6 +68,8 @@ export default function DraftEditorPage() {
       throw error;
     }
   };
+
+  // -- init/load -------------------------------------------------------------
 
   useEffect(() => {
     if (id === 'new') {
@@ -77,13 +91,18 @@ export default function DraftEditorPage() {
     }
   }, [id, getDraft]);
 
+  // -- UI actions ------------------------------------------------------------
+
   const handleTemplateChange = (templateId: string) => {
     const template = contentTemplates[templateId];
-    if (template) setDraft(d => d ? { ...d, content: template.content } : null);
+    if (template) {
+      setDraft(d => d ? { ...d, content: template.content } : null);
+    }
   };
 
   const handleSave = async () => {
     if (!draft?.id || !draft.title) {
+      // If title is empty, create a temporary one for saving
       const draftTitle = draft?.title || `New Draft ${new Date().toLocaleTimeString()}`;
       setDraft(d => d ? { ...d, title: draftTitle } : null);
     }
@@ -100,9 +119,11 @@ export default function DraftEditorPage() {
     try {
       await saveDraft(draftData);
       toast({ title: 'Draft Saved', description: `Draft "${draftData.title}" has been saved.` });
-      if (id === 'new') router.replace(`/drafts/${draftData.id}`);
+      if (id === 'new') {
+        router.replace(`/drafts/${draftData.id}`);
+      }
     } catch {
-      // error toasted above
+      // error already toasted in saveDraft
     } finally {
       setIsSaving(false);
     }
@@ -148,12 +169,13 @@ export default function DraftEditorPage() {
 
   const handleUploadClick = () => fileInputRef.current?.click();
 
+  // *** New signed-URL upload path (copy-paste safe) ***
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || !files.length) return;
     const file = files[0];
 
-    // ensure a draft id right away
+    // ensure we have ids without blocking UX
     const draftId = draft?.id ?? uuidv4();
     if (!draft?.id) setDraft(d => (d ? { ...d, id: draftId } : { id: draftId } as any));
 
@@ -166,24 +188,19 @@ export default function DraftEditorPage() {
     setUploadProgress(0);
 
     try {
-      // Use helper (signed URL + PUT with matching Content-Type)
-      const { objectPath } = await uploadViaSignedUrl({
+      const { objectPath, downloadURL, contentType } = await uploadViaSignedUrl({
         file,
         orgId: userData.organizationId,
         draftId,
         functions,
         storage,
-        onProgress: pct => setUploadProgress(pct),
+        onProgress: (pct) => setUploadProgress(pct),
       });
-
-      // Get a normal download URL for display
-      const sdkRef = storageRef(storage, objectPath);
-      const downloadURL = await getDownloadURL(sdkRef);
 
       const newAttachment: Attachment = {
         name: file.name,
         url: downloadURL,
-        type: file.type,
+        type: contentType,
         path: objectPath,
       };
 
@@ -200,8 +217,8 @@ export default function DraftEditorPage() {
       if (!draft?.content) {
         const guess =
           file.type.startsWith('image/') ? 'socialMediaPost' :
-          /memo|pdf|doc/i.test(file.name) ? 'internalMemo' :
-          'blogArticle';
+            /memo|pdf|doc/i.test(file.name) ? 'internalMemo' :
+              'blogArticle';
         const t = contentTemplates[guess];
         if (t) setDraft(d => (d ? { ...d, content: t.content } : d));
       }
@@ -218,12 +235,15 @@ export default function DraftEditorPage() {
 
   const handleRemoveAttachment = async (attachmentToRemove: Attachment) => {
     if (!draft?.id) return;
+
     try {
       const fileRef = storageRef(storage, attachmentToRemove.path);
       await deleteObject(fileRef);
+
       const updatedAttachments = draft.attachments?.filter(att => att.url !== attachmentToRemove.url) || [];
       setDraft(d => d ? { ...d, attachments: updatedAttachments } : null);
       await saveDraft({ id: draft.id, attachments: updatedAttachments });
+
       toast({ title: 'Attachment Removed' });
     } catch (error: any) {
       console.error("Error removing attachment: ", error);
@@ -231,9 +251,12 @@ export default function DraftEditorPage() {
     }
   };
 
+  // -- render ---------------------------------------------------------------
+
   if (!draft && id !== 'new') {
     return <div className="flex justify-center items-center h-screen"><Loader2 className="h-8 w-8 animate-spin" /></div>;
   }
+
   if (!draft) return null;
 
   const canEdit =
@@ -247,9 +270,7 @@ export default function DraftEditorPage() {
         <div className="flex items-center justify-between flex-wrap gap-2">
           <h1 className="text-2xl font-bold tracking-tight font-headline">Draft Editor</h1>
           <div className="flex items-center gap-2">
-            {userData?.role === 'Contributor' && draft.status === 'Draft' && (
-              <Button onClick={() => draft.id && submitDraft(draft.id)}>Submit for Review</Button>
-            )}
+            {userData?.role === 'Contributor' && draft.status === 'Draft' && <Button onClick={() => draft.id && submitDraft(draft.id)}>Submit for Review</Button>}
             {(userData?.role === 'Approver' || userData?.role === 'Admin') && draft.status === 'In Review' && (
               <>
                 <Button variant="destructive" onClick={() => draft.id && rejectDraft(draft.id, 'Needs improvement')}>Reject</Button>
@@ -323,11 +344,9 @@ export default function DraftEditorPage() {
                       <FileIcon className="h-10 w-10 text-muted-foreground" />
                     </div>
                   )}
-
                   <div className="absolute bottom-0 left-0 right-0 bg-black/50 p-2 text-white text-xs truncate">
                     {file.name}
                   </div>
-
                   {canEdit && (
                     <Button
                       variant="destructive"
@@ -353,10 +372,7 @@ export default function DraftEditorPage() {
       <div className="w-full lg:w-[400px] lg:min-w-[400px] lg:max-h-screen lg:overflow-y-auto border-l bg-muted/20 p-4 md:p-6 sticky top-0">
         <Card className="sticky top-6">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Sparkles className="text-primary" />
-              AI Alignment Analysis
-            </CardTitle>
+            <CardTitle className="flex items-center gap-2"><Sparkles className="text-primary" /> AI Alignment Analysis</CardTitle>
             <CardDescription>Score your content against the strategic blueprint.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -365,12 +381,7 @@ export default function DraftEditorPage() {
               Score Content Alignment
             </Button>
 
-            {isScoring && (
-              <div className="flex flex-col items-center gap-2 text-muted-foreground">
-                <Loader2 className="animate-spin" />
-                <span>Analyzing...</span>
-              </div>
-            )}
+            {isScoring && <div className="flex flex-col items-center gap-2 text-muted-foreground"><Loader2 className="animate-spin" /><span>Analyzing...</span></div>}
 
             {aiResult && (
               <div className="space-y-4 pt-4">
