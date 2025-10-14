@@ -31,7 +31,7 @@ import {
 import { scoreContentAlignment } from '@/ai/flows/score-content-alignment';
 import type { ScoreContentAlignmentOutput } from '@/ai/types';
 
-import { useFirebase, useStorage } from '@/firebase';
+import { useFirebase } from '@/firebase';
 import { ref as storageRef, deleteObject } from "firebase/storage";
 
 export default function DraftEditorPage() {
@@ -40,8 +40,7 @@ export default function DraftEditorPage() {
   const id = params.id;
 
   const { getDraft, userData, submitDraft, approveDraft, rejectDraft, blueprint } = useApp();
-  const { firestore, functions } = useFirebase();
-  const storage = useStorage();
+  const { firestore, functions, storage } = useFirebase();
   const { toast } = useToast();
 
   const [draft, setDraft] = useState<Partial<Draft> | null>(null);
@@ -169,7 +168,6 @@ export default function DraftEditorPage() {
 
   const handleUploadClick = () => fileInputRef.current?.click();
 
-  // *** New signed-URL upload path (copy-paste safe) ***
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || !files.length) return;

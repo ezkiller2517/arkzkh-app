@@ -6,7 +6,6 @@ import { getAuth, Auth } from 'firebase/auth';
 import { getFirestore, Firestore } from 'firebase/firestore';
 import { getStorage, FirebaseStorage } from 'firebase/storage';
 import { getFunctions, Functions } from 'firebase/functions';
-import { initializeAppCheck, ReCaptchaEnterpriseProvider } from 'firebase/app-check';
 
 // Store SDK instances
 let firebaseApp: FirebaseApp;
@@ -19,15 +18,6 @@ let functions: Functions;
 export function initializeFirebase() {
   if (getApps().length === 0) {
     firebaseApp = initializeApp(firebaseConfig);
-    // Initialize App Check only on the client
-    if (typeof window !== 'undefined') {
-      // Pass your reCAPTCHA v3 site key (public key) to activate().
-      // You can get this key from the Google Cloud console.
-      initializeAppCheck(firebaseApp, {
-        provider: new ReCaptchaEnterpriseProvider('6Ld-8RwqAAAAAN0zO9lS8z5i4sXma5aB2Y_wz-eG' /* reCAPTCHA enterprise site key */),
-        isTokenAutoRefreshEnabled: true
-      });
-    }
   } else {
     firebaseApp = getApp();
   }
@@ -46,6 +36,6 @@ export * from './provider';
 export * from './client-provider';
 export * from './firestore/use-collection';
 export * from './firestore/use-doc';
-export * from './non-blocking-login';
+export * from './non-blocking-updates'; // Corrected import
 export * from './errors';
 export * from './error-emitter';

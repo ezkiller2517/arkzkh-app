@@ -22,7 +22,7 @@ export default async function uploadViaSignedUrl(opts: UploadOpts) {
     orgId,
     draftId,
     fileName: file.name,
-    contentType,
+    contentType, // Pass content type to the function
   });
 
   // Defensive: make sure the function returned a proper HTTPS signed URL
@@ -37,9 +37,6 @@ export default async function uploadViaSignedUrl(opts: UploadOpts) {
     console.error("Bad getSignedUploadUrl response (no objectPath):", resp?.data);
     throw new Error("objectPath missing from function response.");
   }
-
-  console.log("[upload] signed URL:", url);
-  console.log("[upload] objectPath:", objectPath);
 
   // 3) PUT with matching Content-Type; no Authorization or custom headers
   await new Promise<void>((resolve, reject) => {
