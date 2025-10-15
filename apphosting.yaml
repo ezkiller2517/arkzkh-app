@@ -2,7 +2,7 @@ build:
   steps:
     - name: fetch
       fetch:
-        repo: .  # required; fetches your workspace
+        repo: .
 
     - name: npm-install
       npm:
@@ -15,12 +15,20 @@ build:
           script: build
           directory: .
 
+    - name: npm-start
+      npm:
+        run:
+          script: start
+          directory: .
+
   output:
-    directory: .next  # <-- tells Firebase where your build lives
+    directory: .next
 
 runConfig:
   runtime: nodejs20
   workingDirectory: .
   env:
+    - key: HOST
+      value: "0.0.0.0"
     - key: PORT
       value: "${PORT}"
