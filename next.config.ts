@@ -1,23 +1,12 @@
-// /next.config.ts  (project root in Firebase Studio)
-
 import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
-  // 🔑 Required for Firebase App Hosting (runs your app as a Node server)
+  // ⬇️ required so Firebase runs a Node server, not a static export
   output: 'standalone',
 
-  // Nice-to-haves
-  reactStrictMode: true,
-
-  // Keep your existing build relaxations
-  typescript: {
-    ignoreBuildErrors: true,
-  },
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
-
-  // Keep your existing image allowlist
+  // keep your original settings
+  typescript: { ignoreBuildErrors: true },
+  eslint: { ignoreDuringBuilds: true },
   images: {
     remotePatterns: [
       { protocol: 'https', hostname: 'placehold.co', port: '', pathname: '/**' },
