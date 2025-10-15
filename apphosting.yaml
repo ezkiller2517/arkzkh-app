@@ -2,7 +2,7 @@ build:
   steps:
     - name: fetch
       fetch:
-        directory: .
+        repo: .               # <— required; fetch the current workspace
     - name: npm-install
       npm:
         install:
