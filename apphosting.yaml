@@ -1,7 +1,26 @@
-# Settings to manage and configure a Firebase App Hosting backend.
-# https://firebase.google.com/docs/app-hosting/configure
+build:
+  steps:
+    - name: fetch
+      fetch:
+        directory: .
+    - name: npm-install
+      npm:
+        install:
+          directory: .
+    - name: npm-build
+      npm:
+        run:
+          script: build
+          directory: .
+    - name: npm-start
+      npm:
+        run:
+          script: start
+          directory: .
 
 runConfig:
-  # Increase this value if you'd like to automatically spin up
-  # more instances in response to increased traffic.
-  maxInstances: 1
+  runtime: nodejs20
+  workingDirectory: .
+  env:
+    - key: PORT
+      value: "${PORT}"
