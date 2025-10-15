@@ -2,16 +2,19 @@ build:
   steps:
     - name: fetch
       fetch:
-        repo: .
+        repo: .            # <-- REQUIRED: fetch the current workspace
+
     - name: npm-install
       npm:
         install:
           directory: .
+
     - name: npm-build
       npm:
         run:
           script: build
           directory: .
+
     - name: npm-start
       npm:
         run:
