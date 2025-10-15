@@ -2,7 +2,7 @@ build:
   steps:
     - name: fetch
       fetch:
-        repo: .            # <-- REQUIRED: fetch the current workspace
+        repo: .  # required; fetches your workspace
 
     - name: npm-install
       npm:
@@ -15,11 +15,8 @@ build:
           script: build
           directory: .
 
-    - name: npm-start
-      npm:
-        run:
-          script: start
-          directory: .
+  output:
+    directory: .next  # <-- tells Firebase where your build lives
 
 runConfig:
   runtime: nodejs20
