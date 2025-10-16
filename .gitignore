@@ -9,12 +9,3 @@ dist/
 .idx/
 firebase-debug.log
 .DS_Store
-# Cloud Shell clutter
-.cache/
-.config/
-.gemini/
-.gcloud/
-.gsutil/
-.npm/
-.docker/
-README-cloudshell.txt
