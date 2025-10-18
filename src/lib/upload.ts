@@ -1,4 +1,3 @@
-// src/lib/uploads.ts
 'use client';
 
 import { getDownloadURL, ref, uploadBytesResumable } from 'firebase/storage';
@@ -12,8 +11,6 @@ type UploadArgs = {
 
 export async function uploadUserImage({ userId, file, onProgress }: UploadArgs) {
   const { storage } = getFirebase();
-
-  // Keep path aligned with your Storage Rules
   const fileId = crypto.randomUUID();
   const path = `uploads/${userId}/${fileId}-${file.name}`;
   const r = ref(storage, path);
@@ -27,10 +24,12 @@ export async function uploadUserImage({ userId, file, onProgress }: UploadArgs) 
   }>((resolve, reject) => {
     task.on(
       'state_changed',
-      (s) => {
-        if (s.total) onProgress?.((s.bytesTransferred / s.total) * 100);
+      (snapshot) => {
+        if (snapshot.total) {
+          onProgress?.((snapshot.bytesTransferred / snapshot.total) * 100);
+        }
       },
-      reject,
+      (error) => reject(error),
       async () => {
         const downloadURL = await getDownloadURL(r);
         resolve({
