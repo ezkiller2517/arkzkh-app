@@ -14,7 +14,7 @@ import { useToast } from '@/hooks/use-toast';
 
 import type { Draft, Attachment } from '@/lib/types';
 import { contentTemplates } from '@/lib/templates';
-import { uploadUserImage } from '@/lib/uploads';
+import { uploadUserImage } from '@/lib/upload';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Progress } from '@/components/ui/progress';
 
@@ -31,7 +31,8 @@ import { scoreContentAlignment } from '@/ai/flows/score-content-alignment';
 import type { ScoreContentAlignmentOutput } from '@/ai/types';
 
 import { useFirebase } from '@/firebase';
-import { ref as storageRef, deleteObject } from "firebase/storage";
+import { ref as storageRef, deleteObject, getDownloadURL } from "firebase/storage";
+import { httpsCallable } from 'firebase/functions';
 
 export default function DraftEditorPage() {
   const router = useRouter();
@@ -39,7 +40,7 @@ export default function DraftEditorPage() {
   const id = params.id;
 
   const { getDraft, userData, submitDraft, approveDraft, rejectDraft, blueprint } = useApp();
-  const { firestore, storage } = useFirebase();
+  const { firestore, storage, functions } = useFirebase();
   const { toast } = useToast();
 
   const [draft, setDraft] = useState<Partial<Draft> | null>(null);
@@ -179,57 +180,99 @@ export default function DraftEditorPage() {
   // -------------------------------------------------------------------------
   const handleUploadClick = () => fileInputRef.current?.click();
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files?.length) return;
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+  
     const file = files[0];
-
+  
+    // Ensure we have a draftId immediately (no blocking save)
     const draftId = draft?.id ?? uuidv4();
-    if (!draft?.id) setDraft(d => (d ? { ...d, id: draftId } : { id: draftId } as any));
-
-    if (!userData?.uid) {
-      toast({ title: 'Cannot upload', description: 'User not signed in.', variant: 'destructive' });
+    if (!draft?.id) {
+      setDraft(d => d ? { ...d, id: draftId } : ({ id: draftId } as any));
+    }
+  
+    if (!userData?.organizationId) {
+      toast({
+        title: "Cannot upload",
+        description: "Organization not loaded.",
+        variant: "destructive",
+      });
       return;
     }
-
+  
     setIsUploading(true);
     setUploadProgress(0);
-
+  
     try {
-      const { path: objectPath, downloadURL, contentType } = await uploadUserImage({
-        userId: userData.uid,
-        file,
-        onProgress: pct => setUploadProgress(pct),
+      // 1) Ask backend for a signed URL
+      const getSignedUploadUrl = httpsCallable(functions, "getSignedUploadUrl");
+      const res = await getSignedUploadUrl({
+        orgId: userData.organizationId,
+        draftId,
+        fileName: file.name,
+        contentType: file.type || "application/octet-stream",
       });
+  
+      const { url, objectPath } = (res.data || {}) as {
+        url: string;
+        objectPath: string;
+      };
+      if (!url || !objectPath) {
+        throw new Error("Signed URL response missing fields.");
+      }
+  
+      // 2) Upload via PUT to the signed URL with progress
+      await new Promise<void>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable) {
+            setUploadProgress((e.loaded / e.total) * 100);
+          }
+        };
+        xhr.onerror = () => reject(new Error("Upload failed (network/XHR)."));
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) resolve();
+          else reject(new Error(`Upload failed with status ${xhr.status}.`));
+        };
+        xhr.open("PUT", url, true);
+        xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
+        xhr.send(file);
+      });
+  
+      // 3) Get a standard downloadURL (so the rest of your app works unchanged)
+      const sdkRef = storageRef(storage, objectPath);
+      const downloadURL = await getDownloadURL(sdkRef);
 
       const newAttachment: Attachment = {
         name: file.name,
         url: downloadURL,
-        type: contentType,
-        path: objectPath,
+        type: file.type,
+        path: objectPath, // persistent storage path for this file
       };
-
+  
       const updated = [...(draft?.attachments || []), newAttachment];
-      setDraft(d => (d ? { ...d, id: draftId, attachments: updated } : { id: draftId, attachments: updated } as any));
-
+      setDraft(d => (d ? { ...d, id: draftId, attachments: updated } : ({ id: draftId, attachments: updated } as any)));
+  
       await saveDraft({
         id: draftId,
         title: draft?.title ?? `New Draft ${new Date().toLocaleTimeString()}`,
         attachments: updated,
       });
-
-      toast({ title: 'File uploaded', description: file.name });
+  
+      toast({ title: "File uploaded", description: file.name });
     } catch (err: any) {
-      console.error('Upload error:', err);
+      console.error(err);
       toast({
-        title: 'Upload failed',
-        description: err.message || String(err),
-        variant: 'destructive',
+        title: "Upload failed",
+        description: err.message || "Could not upload file.",
+        variant: "destructive",
         duration: 9000,
       });
     } finally {
       setIsUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
+      setUploadProgress(0);
+      if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
 
