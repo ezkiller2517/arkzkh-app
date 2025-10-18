@@ -15,7 +15,6 @@ import { useToast } from '@/hooks/use-toast';
 import type { Draft, Attachment } from '@/lib/types';
 import { contentTemplates } from '@/lib/templates';
 import { uploadUserImage } from '@/lib/uploads';
-
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Progress } from '@/components/ui/progress';
 
@@ -40,7 +39,7 @@ export default function DraftEditorPage() {
   const id = params.id;
 
   const { getDraft, userData, submitDraft, approveDraft, rejectDraft, blueprint } = useApp();
-  const { firestore, functions, storage } = useFirebase();
+  const { firestore, storage } = useFirebase();
   const { toast } = useToast();
 
   const [draft, setDraft] = useState<Partial<Draft> | null>(null);
@@ -51,11 +50,16 @@ export default function DraftEditorPage() {
   const [aiResult, setAiResult] = useState<ScoreContentAlignmentOutput | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // -- helpers ---------------------------------------------------------------
-
+  // -------------------------------------------------------------------------
+  // Save Draft
+  // -------------------------------------------------------------------------
   const saveDraft = async (draftData: Partial<Draft> & { id: string }) => {
     if (!userData?.organizationId) {
-      toast({ title: 'Error Saving', description: 'Organization data is not loaded.', variant: 'destructive' });
+      toast({
+        title: 'Error Saving',
+        description: 'Organization data is not loaded.',
+        variant: 'destructive',
+      });
       return;
     }
     const docRef = doc(firestore, 'organizations', userData.organizationId, 'contentObjects', draftData.id);
@@ -63,13 +67,18 @@ export default function DraftEditorPage() {
       await setDoc(docRef, { ...draftData, updatedAt: serverTimestamp() }, { merge: true });
     } catch (error: any) {
       console.error("Error saving draft: ", error);
-      toast({ title: 'Save Failed', description: error.message || 'Could not save the draft.', variant: 'destructive' });
+      toast({
+        title: 'Save Failed',
+        description: error.message || 'Could not save the draft.',
+        variant: 'destructive',
+      });
       throw error;
     }
   };
 
-  // -- init/load -------------------------------------------------------------
-
+  // -------------------------------------------------------------------------
+  // Init / Load Draft
+  // -------------------------------------------------------------------------
   useEffect(() => {
     if (id === 'new') {
       setDraft({ id: uuidv4(), title: '', content: '', status: 'Draft', attachments: [] });
@@ -90,8 +99,9 @@ export default function DraftEditorPage() {
     }
   }, [id, getDraft]);
 
-  // -- UI actions ------------------------------------------------------------
-
+  // -------------------------------------------------------------------------
+  // UI Actions
+  // -------------------------------------------------------------------------
   const handleTemplateChange = (templateId: string) => {
     const template = contentTemplates[templateId];
     if (template) {
@@ -101,7 +111,6 @@ export default function DraftEditorPage() {
 
   const handleSave = async () => {
     if (!draft?.id || !draft.title) {
-      // If title is empty, create a temporary one for saving
       const draftTitle = draft?.title || `New Draft ${new Date().toLocaleTimeString()}`;
       setDraft(d => d ? { ...d, title: draftTitle } : null);
     }
@@ -118,11 +127,7 @@ export default function DraftEditorPage() {
     try {
       await saveDraft(draftData);
       toast({ title: 'Draft Saved', description: `Draft "${draftData.title}" has been saved.` });
-      if (id === 'new') {
-        router.replace(`/drafts/${draftData.id}`);
-      }
-    } catch {
-      // error already toasted in saveDraft
+      if (id === 'new') router.replace(`/drafts/${draftData.id}`);
     } finally {
       setIsSaving(false);
     }
@@ -130,11 +135,11 @@ export default function DraftEditorPage() {
 
   const handleScoreAlignment = async () => {
     if (!blueprint) {
-      toast({ title: 'Strategic Blueprint not set', description: 'Please set the blueprint before scoring.', variant: 'destructive' });
+      toast({ title: 'Strategic Blueprint not set', variant: 'destructive' });
       return;
     }
     if (!draft?.content) {
-      toast({ title: 'Content is empty', description: 'Write some content before scoring.', variant: 'destructive' });
+      toast({ title: 'Content is empty', variant: 'destructive' });
       return;
     }
 
@@ -154,10 +159,13 @@ export default function DraftEditorPage() {
           feedback: result.feedback,
           suggestions: result.suggestedActions,
           rationale: result.rationale,
-          justification: result.justification
+          justification: result.justification,
         });
       }
-      toast({ title: 'Scoring Complete', description: `Alignment score: ${(result.alignmentScore * 100).toFixed(0)}%` });
+      toast({
+        title: 'Scoring Complete',
+        description: `Alignment score: ${(result.alignmentScore * 100).toFixed(0)}%`,
+      });
     } catch (error) {
       console.error(error);
       toast({ title: 'Scoring Failed', variant: 'destructive' });
@@ -166,19 +174,21 @@ export default function DraftEditorPage() {
     }
   };
 
+  // -------------------------------------------------------------------------
+  // Upload Logic (new direct Firebase helper)
+  // -------------------------------------------------------------------------
   const handleUploadClick = () => fileInputRef.current?.click();
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
-    if (!files || !files.length) return;
+    if (!files?.length) return;
     const file = files[0];
 
-    // ensure we have ids without blocking UX
     const draftId = draft?.id ?? uuidv4();
     if (!draft?.id) setDraft(d => (d ? { ...d, id: draftId } : { id: draftId } as any));
 
-    if (!userData?.organizationId) {
-      toast({ title: 'Cannot upload', description: 'Organization not loaded.', variant: 'destructive' });
+    if (!userData?.uid) {
+      toast({ title: 'Cannot upload', description: 'User not signed in.', variant: 'destructive' });
       return;
     }
 
@@ -186,13 +196,10 @@ export default function DraftEditorPage() {
     setUploadProgress(0);
 
     try {
-      const { objectPath, downloadURL, contentType } = await uploadViaSignedUrl({
+      const { path: objectPath, downloadURL, contentType } = await uploadUserImage({
+        userId: userData.uid,
         file,
-        orgId: userData.organizationId,
-        draftId,
-        functions,
-        storage,
-        onProgress: (pct) => setUploadProgress(pct),
+        onProgress: pct => setUploadProgress(pct),
       });
 
       const newAttachment: Attachment = {
@@ -211,20 +218,15 @@ export default function DraftEditorPage() {
         attachments: updated,
       });
 
-      // optional: quick template guess
-      if (!draft?.content) {
-        const guess =
-          file.type.startsWith('image/') ? 'socialMediaPost' :
-            /memo|pdf|doc/i.test(file.name) ? 'internalMemo' :
-              'blogArticle';
-        const t = contentTemplates[guess];
-        if (t) setDraft(d => (d ? { ...d, content: t.content } : d));
-      }
-
       toast({ title: 'File uploaded', description: file.name });
     } catch (err: any) {
-      console.error('Signed upload error:', err);
-      toast({ title: 'Upload failed', description: err.message || String(err), variant: 'destructive', duration: 9000 });
+      console.error('Upload error:', err);
+      toast({
+        title: 'Upload failed',
+        description: err.message || String(err),
+        variant: 'destructive',
+        duration: 9000,
+      });
     } finally {
       setIsUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -233,26 +235,32 @@ export default function DraftEditorPage() {
 
   const handleRemoveAttachment = async (attachmentToRemove: Attachment) => {
     if (!draft?.id) return;
-
     try {
       const fileRef = storageRef(storage, attachmentToRemove.path);
       await deleteObject(fileRef);
-
-      const updatedAttachments = draft.attachments?.filter(att => att.url !== attachmentToRemove.url) || [];
-      setDraft(d => d ? { ...d, attachments: updatedAttachments } : null);
-      await saveDraft({ id: draft.id, attachments: updatedAttachments });
-
+      const updated = draft.attachments?.filter(att => att.url !== attachmentToRemove.url) || [];
+      setDraft(d => d ? { ...d, attachments: updated } : null);
+      await saveDraft({ id: draft.id, attachments: updated });
       toast({ title: 'Attachment Removed' });
     } catch (error: any) {
       console.error("Error removing attachment: ", error);
-      toast({ title: 'Removal Failed', description: error.message || "Could not remove the attachment.", variant: 'destructive' });
+      toast({
+        title: 'Removal Failed',
+        description: error.message || "Could not remove attachment.",
+        variant: 'destructive',
+      });
     }
   };
 
-  // -- render ---------------------------------------------------------------
-
+  // -------------------------------------------------------------------------
+  // Render
+  // -------------------------------------------------------------------------
   if (!draft && id !== 'new') {
-    return <div className="flex justify-center items-center h-screen"><Loader2 className="h-8 w-8 animate-spin" /></div>;
+    return (
+      <div className="flex justify-center items-center h-screen">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
   }
 
   if (!draft) return null;
@@ -268,10 +276,14 @@ export default function DraftEditorPage() {
         <div className="flex items-center justify-between flex-wrap gap-2">
           <h1 className="text-2xl font-bold tracking-tight font-headline">Draft Editor</h1>
           <div className="flex items-center gap-2">
-            {userData?.role === 'Contributor' && draft.status === 'Draft' && <Button onClick={() => draft.id && submitDraft(draft.id)}>Submit for Review</Button>}
+            {userData?.role === 'Contributor' && draft.status === 'Draft' && (
+              <Button onClick={() => draft.id && submitDraft(draft.id)}>Submit for Review</Button>
+            )}
             {(userData?.role === 'Approver' || userData?.role === 'Admin') && draft.status === 'In Review' && (
               <>
-                <Button variant="destructive" onClick={() => draft.id && rejectDraft(draft.id, 'Needs improvement')}>Reject</Button>
+                <Button variant="destructive" onClick={() => draft.id && rejectDraft(draft.id, 'Needs improvement')}>
+                  Reject
+                </Button>
                 <Button onClick={() => draft.id && approveDraft(draft.id)}>Approve</Button>
               </>
             )}
@@ -310,12 +322,22 @@ export default function DraftEditorPage() {
           disabled={!canEdit}
         />
 
+        {/* Attachments Section */}
         <div className="space-y-4">
           <div className="flex items-center gap-4">
             <h2 className="text-lg font-semibold">Attachments</h2>
             <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" />
-            <Button variant="outline" size="sm" onClick={handleUploadClick} disabled={!canEdit || isUploading}>
-              {isUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileUp className="mr-2 h-4 w-4" />}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleUploadClick}
+              disabled={!canEdit || isUploading}
+            >
+              {isUploading ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <FileUp className="mr-2 h-4 w-4" />
+              )}
               Upload Media
             </Button>
           </div>
@@ -323,11 +345,13 @@ export default function DraftEditorPage() {
           {isUploading && (
             <div className="space-y-2">
               <Progress value={uploadProgress} className="w-full" />
-              <p className="text-sm text-muted-foreground text-center">{`Uploading... ${Math.round(uploadProgress)}%`}</p>
+              <p className="text-sm text-muted-foreground text-center">
+                Uploading... {Math.round(uploadProgress)}%
+              </p>
             </div>
           )}
 
-          {draft.attachments && draft.attachments.length > 0 ? (
+          {draft.attachments?.length ? (
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
               {draft.attachments.map((file, index) => (
                 <div key={index} className="relative group border rounded-lg overflow-hidden">
@@ -367,10 +391,13 @@ export default function DraftEditorPage() {
         </div>
       </div>
 
+      {/* Sidebar */}
       <div className="w-full lg:w-[400px] lg:min-w-[400px] lg:max-h-screen lg:overflow-y-auto border-l bg-muted/20 p-4 md:p-6 sticky top-0">
         <Card className="sticky top-6">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2"><Sparkles className="text-primary" /> AI Alignment Analysis</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              <Sparkles className="text-primary" /> AI Alignment Analysis
+            </CardTitle>
             <CardDescription>Score your content against the strategic blueprint.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -379,24 +406,37 @@ export default function DraftEditorPage() {
               Score Content Alignment
             </Button>
 
-            {isScoring && <div className="flex flex-col items-center gap-2 text-muted-foreground"><Loader2 className="animate-spin" /><span>Analyzing...</span></div>}
+            {isScoring && (
+              <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                <Loader2 className="animate-spin" />
+                <span>Analyzing...</span>
+              </div>
+            )}
 
             {aiResult && (
               <div className="space-y-4 pt-4">
                 <div>
                   <div className="flex justify-between items-center mb-1">
                     <h3 className="font-semibold">Alignment Score</h3>
-                    <span className="font-bold text-primary text-lg">{(aiResult.alignmentScore * 100).toFixed(0)}%</span>
+                    <span className="font-bold text-primary text-lg">
+                      {(aiResult.alignmentScore * 100).toFixed(0)}%
+                    </span>
                   </div>
                   <Progress value={aiResult.alignmentScore * 100} />
-                  {aiResult.justification && <p className="text-sm text-muted-foreground italic mt-2">"{aiResult.justification}"</p>}
+                  {aiResult.justification && (
+                    <p className="text-sm text-muted-foreground italic mt-2">
+                      "{aiResult.justification}"
+                    </p>
+                  )}
                 </div>
                 <Accordion type="single" collapsible className="w-full" defaultValue="suggestions">
                   <AccordionItem value="suggestions">
                     <AccordionTrigger>Actionable Suggestions</AccordionTrigger>
                     <AccordionContent>
                       <ul className="list-disc pl-4 space-y-2 text-sm">
-                        {aiResult.suggestedActions.map((action, i) => <li key={i}>{action}</li>)}
+                        {aiResult.suggestedActions.map((action, i) => (
+                          <li key={i}>{action}</li>
+                        ))}
                       </ul>
                     </AccordionContent>
                   </AccordionItem>
