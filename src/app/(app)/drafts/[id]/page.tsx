@@ -14,7 +14,7 @@ import { useToast } from '@/hooks/use-toast';
 
 import type { Draft, Attachment } from '@/lib/types';
 import { contentTemplates } from '@/lib/templates';
-import { uploadUserImage } from '@/lib/upload';
+import { uploadUserImage } from '@/lib/uploads'; // ✅ plural: uploads
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Progress } from '@/components/ui/progress';
 
@@ -25,14 +25,13 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from '@/components/ui/select';
 
 import { scoreContentAlignment } from '@/ai/flows/score-content-alignment';
 import type { ScoreContentAlignmentOutput } from '@/ai/types';
 
 import { useFirebase } from '@/firebase';
-import { ref as storageRef, deleteObject, getDownloadURL } from "firebase/storage";
-import { httpsCallable } from 'firebase/functions';
+import { ref as storageRef, deleteObject } from 'firebase/storage';
 
 export default function DraftEditorPage() {
   const router = useRouter();
@@ -40,7 +39,9 @@ export default function DraftEditorPage() {
   const id = params.id;
 
   const { getDraft, userData, submitDraft, approveDraft, rejectDraft, blueprint } = useApp();
-  const { firestore, storage, functions } = useFirebase();
+
+  // IMPORTANT: we need auth + firestore + storage here
+  const { auth, firestore, storage } = useFirebase();
   const { toast } = useToast();
 
   const [draft, setDraft] = useState<Partial<Draft> | null>(null);
@@ -63,11 +64,12 @@ export default function DraftEditorPage() {
       });
       return;
     }
+
     const docRef = doc(firestore, 'organizations', userData.organizationId, 'contentObjects', draftData.id);
     try {
       await setDoc(docRef, { ...draftData, updatedAt: serverTimestamp() }, { merge: true });
     } catch (error: any) {
-      console.error("Error saving draft: ", error);
+      console.error('Error saving draft: ', error);
       toast({
         title: 'Save Failed',
         description: error.message || 'Could not save the draft.',
@@ -106,16 +108,17 @@ export default function DraftEditorPage() {
   const handleTemplateChange = (templateId: string) => {
     const template = contentTemplates[templateId];
     if (template) {
-      setDraft(d => d ? { ...d, content: template.content } : null);
+      setDraft(d => (d ? { ...d, content: template.content } : null));
     }
   };
 
   const handleSave = async () => {
     if (!draft?.id || !draft.title) {
       const draftTitle = draft?.title || `New Draft ${new Date().toLocaleTimeString()}`;
-      setDraft(d => d ? { ...d, title: draftTitle } : null);
+      setDraft(d => (d ? { ...d, title: draftTitle } : null));
     }
     setIsSaving(true);
+
     const draftData: Partial<Draft> & { id: string } = {
       id: draft!.id!,
       title: draft!.title || `New Draft ${new Date().toLocaleTimeString()}`,
@@ -125,6 +128,7 @@ export default function DraftEditorPage() {
       createdAt: draft!.createdAt || serverTimestamp(),
       attachments: draft!.attachments || [],
     };
+
     try {
       await saveDraft(draftData);
       toast({ title: 'Draft Saved', description: `Draft "${draftData.title}" has been saved.` });
@@ -176,103 +180,82 @@ export default function DraftEditorPage() {
   };
 
   // -------------------------------------------------------------------------
-  // Upload Logic (new direct Firebase helper)
+  // Upload Logic (direct Firebase SDK)
   // -------------------------------------------------------------------------
   const handleUploadClick = () => fileInputRef.current?.click();
 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (!files || files.length === 0) return;
-  
+
     const file = files[0];
-  
-    // Ensure we have a draftId immediately (no blocking save)
+
+    // Ensure draftId
     const draftId = draft?.id ?? uuidv4();
     if (!draft?.id) {
-      setDraft(d => d ? { ...d, id: draftId } : ({ id: draftId } as any));
+      setDraft(d => (d ? { ...d, id: draftId } : ({ id: draftId } as any)));
     }
-  
+
+    // Require org + signed-in user for rules
     if (!userData?.organizationId) {
-      toast({
-        title: "Cannot upload",
-        description: "Organization not loaded.",
-        variant: "destructive",
-      });
+      toast({ title: 'Cannot upload', description: 'Organization not loaded.', variant: 'destructive' });
       return;
     }
-  
+    const uid = auth?.currentUser?.uid;
+    if (!uid) {
+      toast({ title: 'Sign in required', description: 'Please sign in to upload.', variant: 'destructive' });
+      return;
+    }
+
     setIsUploading(true);
     setUploadProgress(0);
-  
+
     try {
-      // 1) Ask backend for a signed URL
-      const getSignedUploadUrl = httpsCallable(functions, "getSignedUploadUrl");
-      const res = await getSignedUploadUrl({
-        orgId: userData.organizationId,
-        draftId,
-        fileName: file.name,
-        contentType: file.type || "application/octet-stream",
+      const { objectPath, downloadURL, contentType } = await uploadUserImage({
+        userId: uid,
+        file,
+        onProgress: pct => setUploadProgress(pct),
       });
-  
-      const { url, objectPath } = (res.data || {}) as {
-        url: string;
-        objectPath: string;
-      };
-      if (!url || !objectPath) {
-        throw new Error("Signed URL response missing fields.");
-      }
-  
-      // 2) Upload via PUT to the signed URL with progress
-      await new Promise<void>((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        xhr.upload.onprogress = (e) => {
-          if (e.lengthComputable) {
-            setUploadProgress((e.loaded / e.total) * 100);
-          }
-        };
-        xhr.onerror = () => reject(new Error("Upload failed (network/XHR)."));
-        xhr.onload = () => {
-          if (xhr.status >= 200 && xhr.status < 300) resolve();
-          else reject(new Error(`Upload failed with status ${xhr.status}.`));
-        };
-        xhr.open("PUT", url, true);
-        xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
-        xhr.send(file);
-      });
-  
-      // 3) Get a standard downloadURL (so the rest of your app works unchanged)
-      const sdkRef = storageRef(storage, objectPath);
-      const downloadURL = await getDownloadURL(sdkRef);
 
       const newAttachment: Attachment = {
         name: file.name,
         url: downloadURL,
-        type: file.type,
-        path: objectPath, // persistent storage path for this file
+        type: contentType,
+        path: objectPath,
       };
-  
+
       const updated = [...(draft?.attachments || []), newAttachment];
       setDraft(d => (d ? { ...d, id: draftId, attachments: updated } : ({ id: draftId, attachments: updated } as any)));
-  
+
       await saveDraft({
         id: draftId,
         title: draft?.title ?? `New Draft ${new Date().toLocaleTimeString()}`,
         attachments: updated,
       });
-  
-      toast({ title: "File uploaded", description: file.name });
+
+      // Optional: seed content from template if empty
+      if (!draft?.content) {
+        const guess =
+          file.type.startsWith('image/') ? 'socialMediaPost' :
+          /memo|pdf|doc/i.test(file.name) ? 'internalMemo' :
+          'blogArticle';
+        const t = contentTemplates[guess];
+        if (t) setDraft(d => (d ? { ...d, content: t.content } : d));
+      }
+
+      toast({ title: 'File uploaded', description: file.name });
     } catch (err: any) {
-      console.error(err);
+      console.error('Upload error:', err);
       toast({
-        title: "Upload failed",
-        description: err.message || "Could not upload file.",
-        variant: "destructive",
+        title: 'Upload failed',
+        description: err.message || 'Could not upload file.',
+        variant: 'destructive',
         duration: 9000,
       });
     } finally {
       setIsUploading(false);
       setUploadProgress(0);
-      if (fileInputRef.current) fileInputRef.current.value = "";
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
@@ -282,14 +265,14 @@ export default function DraftEditorPage() {
       const fileRef = storageRef(storage, attachmentToRemove.path);
       await deleteObject(fileRef);
       const updated = draft.attachments?.filter(att => att.url !== attachmentToRemove.url) || [];
-      setDraft(d => d ? { ...d, attachments: updated } : null);
+      setDraft(d => (d ? { ...d, attachments: updated } : null));
       await saveDraft({ id: draft.id, attachments: updated });
       toast({ title: 'Attachment Removed' });
     } catch (error: any) {
-      console.error("Error removing attachment: ", error);
+      console.error('Error removing attachment: ', error);
       toast({
         title: 'Removal Failed',
-        description: error.message || "Could not remove attachment.",
+        description: error.message || 'Could not remove attachment.',
         variant: 'destructive',
       });
     }
@@ -341,7 +324,7 @@ export default function DraftEditorPage() {
           <Input
             placeholder="Draft title..."
             value={draft.title || ''}
-            onChange={e => setDraft(d => d ? { ...d, title: e.target.value } : null)}
+            onChange={e => setDraft(d => (d ? { ...d, title: e.target.value } : null))}
             className="text-xl font-semibold flex-grow"
             disabled={!canEdit}
           />
@@ -351,7 +334,9 @@ export default function DraftEditorPage() {
             </SelectTrigger>
             <SelectContent>
               {Object.entries(contentTemplates).map(([id, { name }]) => (
-                <SelectItem key={id} value={id}>{name}</SelectItem>
+                <SelectItem key={id} value={id}>
+                  {name}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -360,7 +345,7 @@ export default function DraftEditorPage() {
         <Textarea
           placeholder="Start writing your content here..."
           value={draft.content || ''}
-          onChange={e => setDraft(d => d ? { ...d, content: e.target.value } : null)}
+          onChange={e => setDraft(d => (d ? { ...d, content: e.target.value } : null))}
           className="min-h-[50vh] text-base"
           disabled={!canEdit}
         />
@@ -370,17 +355,8 @@ export default function DraftEditorPage() {
           <div className="flex items-center gap-4">
             <h2 className="text-lg font-semibold">Attachments</h2>
             <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" />
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleUploadClick}
-              disabled={!canEdit || isUploading}
-            >
-              {isUploading ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <FileUp className="mr-2 h-4 w-4" />
-              )}
+            <Button variant="outline" size="sm" onClick={handleUploadClick} disabled={!canEdit || isUploading}>
+              {isUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileUp className="mr-2 h-4 w-4" />}
               Upload Media
             </Button>
           </div>
