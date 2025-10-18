@@ -14,7 +14,7 @@ import { useToast } from '@/hooks/use-toast';
 
 import type { Draft, Attachment } from '@/lib/types';
 import { contentTemplates } from '@/lib/templates';
-import uploadViaSignedUrl from '@/lib/uploadSignedUrl';
+import { uploadUserImage } from '@/lib/uploads';
 
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Progress } from '@/components/ui/progress';
