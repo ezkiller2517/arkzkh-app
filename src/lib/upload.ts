@@ -11,6 +11,9 @@ type UploadArgs = {
 
 export async function uploadUserImage({ userId, file, onProgress }: UploadArgs) {
   const { storage } = getFirebase();
+
+  // Keep path aligned with your Storage Rules:
+  // match /uploads/{userId}/{fileId}
   const fileId = crypto.randomUUID();
   const path = `uploads/${userId}/${fileId}-${file.name}`;
   const r = ref(storage, path);
@@ -24,19 +27,13 @@ export async function uploadUserImage({ userId, file, onProgress }: UploadArgs) 
   }>((resolve, reject) => {
     task.on(
       'state_changed',
-      (snapshot) => {
-        if (snapshot.total) {
-          onProgress?.((snapshot.bytesTransferred / snapshot.total) * 100);
-        }
+      (s) => {
+        if (s.total) onProgress?.((s.bytesTransferred / s.total) * 100);
       },
-      (error) => reject(error),
+      reject,
       async () => {
         const downloadURL = await getDownloadURL(r);
-        resolve({
-          objectPath: path,
-          downloadURL,
-          contentType: file.type,
-        });
+        resolve({ objectPath: path, downloadURL, contentType: file.type });
       }
     );
   });

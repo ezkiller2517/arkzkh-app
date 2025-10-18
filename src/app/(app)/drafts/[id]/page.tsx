@@ -14,7 +14,7 @@ import { useToast } from '@/hooks/use-toast';
 
 import type { Draft, Attachment } from '@/lib/types';
 import { contentTemplates } from '@/lib/templates';
-import { uploadUserImage } from '@/lib/uploads'; // ✅ plural: uploads
+import { uploadUserImage } from '@/lib/upload';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Progress } from '@/components/ui/progress';
 
@@ -40,7 +40,7 @@ export default function DraftEditorPage() {
 
   const { getDraft, userData, submitDraft, approveDraft, rejectDraft, blueprint } = useApp();
 
-  // IMPORTANT: we need auth + firestore + storage here
+  // We need auth + firestore + storage on the client
   const { auth, firestore, storage } = useFirebase();
   const { toast } = useToast();
 
@@ -52,9 +52,9 @@ export default function DraftEditorPage() {
   const [aiResult, setAiResult] = useState<ScoreContentAlignmentOutput | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // -------------------------------------------------------------------------
+  // -------------------------------
   // Save Draft
-  // -------------------------------------------------------------------------
+  // -------------------------------
   const saveDraft = async (draftData: Partial<Draft> & { id: string }) => {
     if (!userData?.organizationId) {
       toast({
@@ -65,7 +65,14 @@ export default function DraftEditorPage() {
       return;
     }
 
-    const docRef = doc(firestore, 'organizations', userData.organizationId, 'contentObjects', draftData.id);
+    const docRef = doc(
+      firestore,
+      'organizations',
+      userData.organizationId,
+      'contentObjects',
+      draftData.id
+    );
+
     try {
       await setDoc(docRef, { ...draftData, updatedAt: serverTimestamp() }, { merge: true });
     } catch (error: any) {
@@ -79,9 +86,9 @@ export default function DraftEditorPage() {
     }
   };
 
-  // -------------------------------------------------------------------------
+  // -------------------------------
   // Init / Load Draft
-  // -------------------------------------------------------------------------
+  // -------------------------------
   useEffect(() => {
     if (id === 'new') {
       setDraft({ id: uuidv4(), title: '', content: '', status: 'Draft', attachments: [] });
@@ -102,21 +109,22 @@ export default function DraftEditorPage() {
     }
   }, [id, getDraft]);
 
-  // -------------------------------------------------------------------------
+  // -------------------------------
   // UI Actions
-  // -------------------------------------------------------------------------
+  // -------------------------------
   const handleTemplateChange = (templateId: string) => {
     const template = contentTemplates[templateId];
     if (template) {
-      setDraft(d => (d ? { ...d, content: template.content } : null));
+      setDraft((d) => (d ? { ...d, content: template.content } : null));
     }
   };
 
   const handleSave = async () => {
     if (!draft?.id || !draft.title) {
       const draftTitle = draft?.title || `New Draft ${new Date().toLocaleTimeString()}`;
-      setDraft(d => (d ? { ...d, title: draftTitle } : null));
+      setDraft((d) => (d ? { ...d, title: draftTitle } : null));
     }
+
     setIsSaving(true);
 
     const draftData: Partial<Draft> & { id: string } = {
@@ -179,9 +187,9 @@ export default function DraftEditorPage() {
     }
   };
 
-  // -------------------------------------------------------------------------
+  // -------------------------------
   // Upload Logic (direct Firebase SDK)
-  // -------------------------------------------------------------------------
+  // -------------------------------
   const handleUploadClick = () => fileInputRef.current?.click();
 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -193,7 +201,7 @@ export default function DraftEditorPage() {
     // Ensure draftId
     const draftId = draft?.id ?? uuidv4();
     if (!draft?.id) {
-      setDraft(d => (d ? { ...d, id: draftId } : ({ id: draftId } as any)));
+      setDraft((d) => (d ? { ...d, id: draftId } : ({ id: draftId } as any)));
     }
 
     // Require org + signed-in user for rules
@@ -214,7 +222,7 @@ export default function DraftEditorPage() {
       const { objectPath, downloadURL, contentType } = await uploadUserImage({
         userId: uid,
         file,
-        onProgress: pct => setUploadProgress(pct),
+        onProgress: (pct) => setUploadProgress(pct),
       });
 
       const newAttachment: Attachment = {
@@ -225,7 +233,9 @@ export default function DraftEditorPage() {
       };
 
       const updated = [...(draft?.attachments || []), newAttachment];
-      setDraft(d => (d ? { ...d, id: draftId, attachments: updated } : ({ id: draftId, attachments: updated } as any)));
+      setDraft((d) =>
+        d ? { ...d, id: draftId, attachments: updated } : ({ id: draftId, attachments: updated } as any)
+      );
 
       await saveDraft({
         id: draftId,
@@ -240,7 +250,7 @@ export default function DraftEditorPage() {
           /memo|pdf|doc/i.test(file.name) ? 'internalMemo' :
           'blogArticle';
         const t = contentTemplates[guess];
-        if (t) setDraft(d => (d ? { ...d, content: t.content } : d));
+        if (t) setDraft((d) => (d ? { ...d, content: t.content } : d));
       }
 
       toast({ title: 'File uploaded', description: file.name });
@@ -264,8 +274,8 @@ export default function DraftEditorPage() {
     try {
       const fileRef = storageRef(storage, attachmentToRemove.path);
       await deleteObject(fileRef);
-      const updated = draft.attachments?.filter(att => att.url !== attachmentToRemove.url) || [];
-      setDraft(d => (d ? { ...d, attachments: updated } : null));
+      const updated = draft.attachments?.filter((att) => att.url !== attachmentToRemove.url) || [];
+      setDraft((d) => (d ? { ...d, attachments: updated } : null));
       await saveDraft({ id: draft.id, attachments: updated });
       toast({ title: 'Attachment Removed' });
     } catch (error: any) {
@@ -278,9 +288,9 @@ export default function DraftEditorPage() {
     }
   };
 
-  // -------------------------------------------------------------------------
+  // -------------------------------
   // Render
-  // -------------------------------------------------------------------------
+  // -------------------------------
   if (!draft && id !== 'new') {
     return (
       <div className="flex justify-center items-center h-screen">
@@ -324,7 +334,7 @@ export default function DraftEditorPage() {
           <Input
             placeholder="Draft title..."
             value={draft.title || ''}
-            onChange={e => setDraft(d => (d ? { ...d, title: e.target.value } : null))}
+            onChange={(e) => setDraft((d) => (d ? { ...d, title: e.target.value } : null))}
             className="text-xl font-semibold flex-grow"
             disabled={!canEdit}
           />
@@ -345,7 +355,7 @@ export default function DraftEditorPage() {
         <Textarea
           placeholder="Start writing your content here..."
           value={draft.content || ''}
-          onChange={e => setDraft(d => (d ? { ...d, content: e.target.value } : null))}
+          onChange={(e) => setDraft((d) => (d ? { ...d, content: e.target.value } : null))}
           className="min-h-[50vh] text-base"
           disabled={!canEdit}
         />
